@@ -75,6 +75,15 @@ run (with a throwaway `HOME`). State lives under `$HOME/Library/Application Supp
 `CuaSpacesMac --check-launch-only` loads the app's libraries, prints its version and exits
 (`scripts/check-launch.sh`; release builds too).
 
+## Display language (local customization)
+
+General settings offer System, Japanese and English. The classic macOS view and
+its shared Web UI use one display-only preference under `$CUA_HOME/ui-language.json`
+(default `~/.cua/ui-language.json`), separate from SDK and agent settings. The
+initial translation covers main navigation and selected settings; detailed pages
+still fall back to English. See [the shared localization guide](../../libs/cua-localization/README.md)
+for catalogs, host compatibility and the remaining scope.
+
 ## New UI
 
 The New UI (the `web_ui` experiment) makes

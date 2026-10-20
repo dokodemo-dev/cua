@@ -32,14 +32,14 @@ struct RootView: View {
         .confirmationDialog(resetTitle, isPresented: Binding(get: { model.confirmReset != nil },
                                                               set: { if !$0 { model.confirmReset = nil } }),
                             titleVisibility: .visible) {
-            Button("Reset", role: .destructive) { if let b = model.confirmReset { model.reset(b) } }
-            Button("Cancel", role: .cancel) {}
+            Button(model.displayText("Reset"), role: .destructive) { if let b = model.confirmReset { model.reset(b) } }
+            Button(model.displayText("Cancel"), role: .cancel) {}
         } message: {
-            Text("This deletes its computer, conversation, memory and scheduled tasks. Files it made in other places stay.")
+            Text(model.displayText("This deletes its computer, conversation, memory and scheduled tasks. Files it made in other places stay."))
         }
         .alert("Something went wrong", isPresented: Binding(get: { model.store.lastError != nil },
                                                              set: { if !$0 { model.store.lastError = nil } })) {
-            Button("OK") {}
+            Button(model.displayText("OK")) {}
         } message: {
             Text(model.store.lastError ?? "")
         }
@@ -77,7 +77,7 @@ struct Sidebar: View {
     var body: some View {
         List(selection: Binding(get: { model.route }, set: { if let r = $0 { model.route = r } })) {
             Section {
-                Label("New bot", systemImage: "plus.bubble").tag(Route.newBot)
+                Label(model.displayText("New bot"), systemImage: "plus.bubble").tag(Route.newBot)
                 ForEach(model.store.bots) { bot in
                     HStack(spacing: 8) {
                         KoalaAvatar(bot.avatar, mood: bot.mood).frame(width: 22, height: 22)
@@ -93,25 +93,25 @@ struct Sidebar: View {
                     .tag(Route.bot(bot.id))
                 }
             }
-            Section("Work") {
-                Label("Scheduled", systemImage: "clock").tag(Route.scheduled)
+            Section(model.displayText("Work")) {
+                Label(model.displayText("Scheduled"), systemImage: "clock").tag(Route.scheduled)
                 HStack {
-                    Label("Approvals", systemImage: "checkmark.shield")
+                    Label(model.displayText("Approvals"), systemImage: "checkmark.shield")
                     Spacer()
                     let n = model.store.pendingApprovals().count
                     if n > 0 { Text("\(n)").font(.caption).foregroundStyle(.secondary) }
                 }
                 .tag(Route.approvals)
-                Label("Outputs", systemImage: "tray.full").tag(Route.outputs)
+                Label(model.displayText("Outputs"), systemImage: "tray.full").tag(Route.outputs)
             }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 6) {
                 CuaMark().frame(width: 14, height: 14)
-                Text("Cua Bots").font(.caption.weight(.medium))
+                Text(model.displayText("Cua Bots")).font(.caption.weight(.medium))
                 Spacer()
-                Text(model.engine == nil ? "Offline" : "Spaces on this Mac").font(.caption2).foregroundStyle(.secondary)
+                Text(model.displayText(model.engine == nil ? "Offline" : "Spaces on this Mac")).font(.caption2).foregroundStyle(.secondary)
             }
             .padding(10)
         }
@@ -162,7 +162,7 @@ struct BotDetail: View {
                 }
                 .help(bot.isPaused ? "Resume \(bot.name)" : "Pause \(bot.name)")
                 Button { model.showProfile.toggle() } label: {
-                    Label("Profile", systemImage: "sidebar.right")
+                    Label(model.displayText("Profile"), systemImage: "sidebar.right")
                 }
                 .help("Show \(bot.name)'s profile")
             }

@@ -25,10 +25,10 @@ import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
 import { toast, toastError } from "@/components/ui/toast";
 import { creatingLine, thisComputerText } from "@/lib/host-labels";
-import { plural } from "@/lib/plural";
 import { spaceMeters } from "@/lib/resources";
 import { cn } from "@/lib/utils";
 import { createError, createProgress, machineName, matchesQuery, powerButton, powerError, realSpaces, spacePlace, spaceState, visibleSpaces, type SpaceFilter } from "@/lib/spaces";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/spaces/")({
   component: SpacesPage,
@@ -44,6 +44,8 @@ const FILTERS: { value: SpaceFilter; label: string }[] = [
 ];
 
 function SpacesPage() {
+  const { t } = useI18n();
+  const filters = FILTERS.map((option) => ({ ...option, label: t(option.label) }));
   const { data: all = [], isLoading, error, listNotice } = useSpaces();
   // Machines' own desktops are on Machines, not here.
   const spaces = realSpaces(all);
@@ -78,11 +80,11 @@ function SpacesPage() {
   return (
     <Page>
       <PageHeader
-        title="Spaces"
-        description={isLoading ? "Loading Spaces…" : `${plural(spaces.length, "Space")} on ${plural(machines.length, "computer")}, ${running} running`}
+        title={t("Spaces")}
+        description={isLoading ? t("Loading Spaces…") : t("{spaces} on {computers}, {running} running", { spaces: String(spaces.length), computers: String(machines.length), running: String(running) })}
         actions={
           <Button onClick={newSpace}>
-            <PlusIcon /> New Space
+            <PlusIcon /> {t("New Space")}
           </Button>
         }
       />
@@ -98,14 +100,14 @@ function SpacesPage() {
       <ComputersResources snapshot={resources} machines={machines} />
       {sort === "size" ? (
         <p data-sorted-by-size="" className="mb-3 flex items-center gap-2 px-1 text-xs text-muted-foreground">
-          Biggest first, by how much space each one uses on its computer.
+          {t("Biggest first, by how much space each one uses on its computer.")}
           <Link to="/spaces" search={{}} className="font-medium text-foreground underline-offset-2 hover:underline">
-            Show the usual order
+            {t("Show the usual order")}
           </Link>
         </p>
       ) : null}
       <div className="mb-4 flex items-center gap-3">
-        <Segmented aria-label="Filter by state" value={filter} options={FILTERS} onValueChange={setFilter} />
+        <Segmented aria-label={t("Filter by state")} value={filter} options={filters} onValueChange={setFilter} />
         {/* Find a Space by name, detail, id or machine (the SwiftUI sidebar's search). */}
         <div className="relative ml-auto w-56">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -119,15 +121,15 @@ function SpacesPage() {
                 setQuery("");
               }
             }}
-            placeholder="Filter"
-            aria-label="Filter Spaces"
+            placeholder={t("Filter")}
+            aria-label={t("Filter Spaces")}
             data-spaces-filter=""
             className="pl-8"
           />
         </div>
       </div>
       {error ? (
-        <EmptyState icon={<MonitorIcon />} title="Couldn't load Spaces">
+        <EmptyState icon={<MonitorIcon />} title={t("Couldn't load Spaces")}>
           {error.message}
         </EmptyState>
       ) : isLoading ? null : spaces.length === 0 && home && home.tiles.length > 0 ? (
@@ -137,22 +139,22 @@ function SpacesPage() {
       ) : spaces.length === 0 ? (
         <EmptyState
           icon={<MonitorIcon />}
-          title="No Spaces yet"
+          title={t("No Spaces yet")}
           action={
             <Button onClick={newSpace}>
-              <PlusIcon /> New Space
+              <PlusIcon /> {t("New Space")}
             </Button>
           }
         >
-          Create one on {thisComputerText()}.
+          {t("Create one on {computer}.", { computer: thisComputerText() })}
         </EmptyState>
       ) : shown.length === 0 && query.trim() ? (
-        <EmptyState icon={<SearchIcon />} title="No matches">
-          No {filter === "all" ? "" : `${filter} `}Space matches “{query.trim()}”.
+        <EmptyState icon={<SearchIcon />} title={t("No matches")}>
+          {t("No {filter} Space matches “{query}”.", { filter: filter === "all" ? t("All") : t(filter), query: query.trim() })}
         </EmptyState>
       ) : shown.length === 0 ? (
-        <EmptyState icon={<MonitorIcon />} title={`No ${filter} Spaces`}>
-          Pick another filter to see the rest.
+        <EmptyState icon={<MonitorIcon />} title={t("No {filter} Spaces", { filter: t(filter) })}>
+          {t("Pick another filter to see the rest.")}
         </EmptyState>
       ) : (
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-4">
@@ -168,6 +170,7 @@ function SpacesPage() {
 }
 
 function SpaceTile({ space, machine, resources, accessKey }: { space: Space; machine: string; resources: SpaceResources | null; accessKey?: string | null }) {
+  const { t } = useI18n();
   const drop = useTileDrop(space);
   // A real window dragged over this tile (the host hit-tests the tiles' boxes and says which; macOS only).
   const windowOver = useWindowDropTarget() === space.id;
@@ -197,10 +200,10 @@ function SpaceTile({ space, machine, resources, accessKey }: { space: Space; mac
             to="/keyvault"
             search={{ view: "access", focus: accessKey ?? undefined }}
             data-signed-in={space.id}
-            title="A Keyvault sign-in is live in this Space. Open Access."
+            title={t("A Keyvault sign-in is live in this Space. Open Access.")}
             className="inline-flex items-center gap-1 rounded-full border bg-card/90 px-2 py-0.5 text-2xs font-medium text-muted-foreground shadow-xs outline-none backdrop-blur-sm hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
           >
-            <KeyRoundIcon className="size-3" /> Signed in
+            <KeyRoundIcon className="size-3" /> {t("Signed in")}
           </Link>
         ) : null}
         <TilePower space={space} />
@@ -254,6 +257,7 @@ function useTileDrop(space: Space) {
 
 /** Over a tile while files are dragged on it: where they go, or why they can't. */
 function DropOverlay({ space, accepts }: { space: Space; accepts: boolean }) {
+  const { t } = useI18n();
   return (
     <div
       aria-hidden
@@ -263,7 +267,7 @@ function DropOverlay({ space, accepts }: { space: Space; accepts: boolean }) {
       )}
     >
       {accepts ? <ArrowDownCircleIcon className="size-6 text-brand" strokeWidth={1.5} /> : null}
-      <span className="max-w-[85%] truncate font-medium">{accepts ? `Send to ${space.name}` : `${space.name} isn't running`}</span>
+      <span className="max-w-[85%] truncate font-medium">{accepts ? t("Send to {name}", { name: space.name }) : t("{name} isn't running", { name: space.name })}</span>
     </div>
   );
 }

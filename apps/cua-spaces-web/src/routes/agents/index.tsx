@@ -38,6 +38,7 @@ import {
 } from "@/lib/agents";
 import { needsAgentKey } from "@/lib/agent-keys";
 import { relativeTime, cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/agents/")({
   component: AgentsPage,
@@ -68,6 +69,7 @@ function useNow(ms = 30_000): number {
 }
 
 function AgentsPage() {
+  const { t } = useI18n();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/agents/" });
   const { data, isLoading, error } = useAgents();
@@ -81,11 +83,11 @@ function AgentsPage() {
     <div className="flex h-full flex-col">
       <div className="px-8 pt-6">
         <PageHeader
-          title="Agents"
-          description="Persistent agents and the runs in your Spaces."
+          title={t("Agents")}
+          description={t("Persistent agents and the runs in your Spaces.")}
           actions={
             <Button variant="outline" onClick={() => setConnectOpen(true)}>
-              <PlugIcon /> Connect an agent
+              <PlugIcon /> {t("Connect an agent")}
             </Button>
           }
         />
@@ -94,11 +96,11 @@ function AgentsPage() {
         {error ? (
           <EmptyState
             icon={<BotIcon />}
-            title={isUnsupported(error) ? "Agents aren't available here yet" : "Couldn't load agents"}
+            title={t(isUnsupported(error) ? "Agents aren't available here yet" : "Couldn't load agents")}
             action={
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setConnectOpen(true)}>
-                  Connect an agent
+                  {t("Connect an agent")}
                 </Button>
                 <AgentKeysLink />
               </div>
@@ -109,17 +111,17 @@ function AgentsPage() {
         ) : isLoading && !data ? null : empty ? (
           <EmptyState
             icon={<BotIcon />}
-            title="No agents yet"
+            title={t("No agents yet")}
             action={
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setConnectOpen(true)}>
-                  <PlugIcon /> Connect an agent
+                  <PlugIcon /> {t("Connect an agent")}
                 </Button>
                 <AgentKeysLink />
               </div>
             }
           >
-            Connect a coding agent to Cua, then ask it to work in a Space. Its runs and persistent agents show up here. Agents need a provider key to run: add one in Settings → Agents.
+            {t("Connect a coding agent to Cua, then ask it to work in a Space. Its runs and persistent agents show up here. Agents need a provider key to run: add one in Settings → Agents.")}
           </EmptyState>
         ) : data ? (
           <div className="flex h-full overflow-hidden rounded-xl border bg-card shadow-xs">
@@ -154,13 +156,14 @@ function AgentList({
   onSelect: (s: AgentsSelection) => void;
 }) {
   const now = useNow();
+  const { t } = useI18n();
   const isRunSelected = (r: AgentRunSummary) => !selected.agent && selected.ref?.spaceId === r.spaceId && selected.ref.runId === r.runId;
   return (
-    <nav aria-label="Agents and runs" className="flex w-[320px] shrink-0 flex-col overflow-y-auto py-2">
+    <nav aria-label={t("Agents and runs")} className="flex w-[320px] shrink-0 flex-col overflow-y-auto py-2">
       {data.canList ? (
-        <Section title="Persistent agents" count={data.agents.length}>
+        <Section title={t("Persistent agents")} count={data.agents.length}>
           {data.agents.length === 0 ? (
-            <p className="px-4 py-2 text-xs text-muted-foreground">None yet. Ask an agent to create one, or run cua agent create.</p>
+            <p className="px-4 py-2 text-xs text-muted-foreground">{t("None yet. Ask an agent to create one, or run cua agent create.")}</p>
           ) : (
             data.agents.map((a) => (
               <ListRow
@@ -172,17 +175,17 @@ function AgentList({
                 title={a.name}
                 subtitle={a.detail}
                 tone={agentTone(a.state)}
-                state={AGENT_STATE_LABEL[a.state]}
+                state={t(AGENT_STATE_LABEL[a.state])}
                 age={a.state === "running" ? "now" : shortAge(a.lastActivityMs, now)}
-                ageTitle={a.lastActivityMs ? `Last saved ${relativeTime(a.lastActivityMs, now)}` : undefined}
+                ageTitle={a.lastActivityMs ? t("Last saved {time}", { time: relativeTime(a.lastActivityMs, now) }) : undefined}
               />
             ))
           )}
         </Section>
       ) : null}
-      <Section title="Recent runs" count={data.runs.length}>
+      <Section title={t("Recent runs")} count={data.runs.length}>
         {data.runs.length === 0 ? (
-          <p className="px-4 py-2 text-xs text-muted-foreground">No runs in your running Spaces.</p>
+          <p className="px-4 py-2 text-xs text-muted-foreground">{t("No runs in your running Spaces.")}</p>
         ) : (
           data.runs.map((r) => (
             <ListRow
@@ -193,9 +196,9 @@ function AgentList({
               title={r.summary || r.harnessName}
               subtitle={`${r.agentName ? `${r.agentName}, ` : ""}${r.harnessName} in ${spaceLabel(r.spaceName)}`}
               tone={runTone(r.status)}
-              state={RUN_STATUS_LABEL[r.status]}
+              state={t(RUN_STATUS_LABEL[r.status])}
               age={shortAge(r.startedMs, now)}
-              ageTitle={r.startedMs ? `Started ${relativeTime(r.startedMs, now)}` : undefined}
+              ageTitle={r.startedMs ? t("Started {time}", { time: relativeTime(r.startedMs, now) }) : undefined}
             />
           ))
         )}
@@ -204,7 +207,7 @@ function AgentList({
         <div className="mt-auto space-y-1 border-t px-4 pt-3 pb-1">
           {data.unread.map((u) => (
             <p key={u.spaceId} className="text-2xs text-muted-foreground">
-              Couldn't read runs in {spaceLabel(u.spaceName)}: {u.message}
+              {t("Couldn't read runs in {space}: {message}", { space: spaceLabel(u.spaceName), message: u.message })}
             </p>
           ))}
         </div>
@@ -308,6 +311,7 @@ function HarnessMark({ mark, large }: { mark: string; large?: boolean }) {
 
 function AgentDetail({ agent, run, runRef }: { agent: AgentSummary | null; run: AgentRunSummary | null; runRef: { spaceId: string; runId: string } | null }) {
   const { pauseAgent, resumeAgent } = useAgents();
+  const { t } = useI18n();
   const { openExternal } = useSession();
   const timeline = useAgentTimeline(runRef);
   const detail = useAgentDetail(agent?.record ?? null);
@@ -324,8 +328,8 @@ function AgentDetail({ agent, run, runRef }: { agent: AgentSummary | null; run: 
   const subtitle = [
     `${harness} in ${space}`,
     agent && run?.summary ? run.summary : null,
-    turn ? `Turn ${turn}` : null,
-    run?.startedMs ? `started ${relativeTime(run.startedMs, now)}` : null,
+    turn ? t("Turn {number}", { number: String(turn) }) : null,
+    run?.startedMs ? t("Started {time}", { time: relativeTime(run.startedMs, now) }) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -351,17 +355,17 @@ function AgentDetail({ agent, run, runRef }: { agent: AgentSummary | null; run: 
         {agent ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
             <StatusDot tone={agentTone(agent.state)} />
-            {AGENT_STATE_LABEL[agent.state]}
+            {t(AGENT_STATE_LABEL[agent.state])}
           </span>
         ) : status ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
             <StatusDot tone={runTone(status)} />
-            {RUN_STATUS_LABEL[status]}
+            {t(RUN_STATUS_LABEL[status])}
           </span>
         ) : null}
         {agent ? (
           <Button size="sm" variant="outline" disabled={busy} onClick={act}>
-            {busy ? (agent.state === "paused" ? "Resuming…" : "Pausing…") : agent.actionLabel}
+            {busy ? t(agent.state === "paused" ? "Resuming…" : "Pausing…") : t(agent.actionLabel)}
           </Button>
         ) : null}
       </header>
@@ -373,7 +377,7 @@ function AgentDetail({ agent, run, runRef }: { agent: AgentSummary | null; run: 
       ) : null}
       {detail.view ? (
         <AgentTabs
-          tabs={[{ tab: "run", label: "Conversation" }, ...detail.view.tabs]}
+          tabs={[{ tab: "run", label: t("Conversation") }, ...detail.view.tabs.map((tab) => ({ ...tab, label: t(tab.label) }))]}
           selected={pane}
           onSelect={(tab) => {
             setPane(tab);
@@ -434,24 +438,25 @@ function DetailBody({
   timeline: AgentTimeline;
   onOpenLink: (url: string) => void;
 }) {
+  const { t } = useI18n();
   if (!hasRun) {
     return (
-      <Centered title={agent?.state === "paused" ? `${agent.name} is paused` : "No runs yet"}>
+      <Centered title={agent?.state === "paused" ? t("{name} is paused", { name: agent.name }) : t("No runs yet")}>
         {agent?.state === "paused"
-          ? `Its home is saved. Resume it to let it work in ${spaceLabel(agent.spaceName)} again.`
-          : `Runs show up here once ${agent?.name ?? "this agent"} starts working.`}
+          ? t("Its home is saved. Resume it to let it work in {space} again.", { space: spaceLabel(agent.spaceName) })
+          : t("Runs show up here once {agent} starts working.", { agent: agent?.name ?? t("this agent") })}
       </Centered>
     );
   }
   if (timeline.unsupported) {
     return (
-      <Centered title="The conversation isn't available here">
-        This version of the app can list runs but can't read what they wrote. {run?.reason ? `The run is ${run.status}: ${run.reason}.` : null}
+      <Centered title={t("The conversation isn't available here")}>
+        {t("This version of the app can list runs but can't read what they wrote.")} {run?.reason ? t("The run is {status}: {reason}.", { status: t(run.status), reason: run.reason }) : null}
       </Centered>
     );
   }
   if (timeline.error && timeline.items.length === 0) {
-    return <Centered title="Couldn't read this run">{timeline.error.message}</Centered>;
+    return <Centered title={t("Couldn't read this run")}>{timeline.error.message}</Centered>;
   }
   if (timeline.isLoading && timeline.items.length === 0) return <div className="flex-1" />;
   return <Timeline className="flex-1" timeline={timeline} onOpenLink={onOpenLink} footer={<RunFooter timeline={timeline} run={run} />} />;
@@ -459,8 +464,9 @@ function DetailBody({
 
 function RunFooter({ timeline, run }: { timeline: AgentTimeline; run: AgentRunSummary | null }) {
   const status = timeline.status ?? run?.status;
+  const { t } = useI18n();
   if (status === "running") {
-    const doing = timeline.phase === "responding" ? "Writing" : timeline.phase === "tool" ? "Using tools" : "Working";
+    const doing = t(timeline.phase === "responding" ? "Writing" : timeline.phase === "tool" ? "Using tools" : "Working");
     return (
       <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
         <StatusDot tone="live" />
@@ -471,13 +477,13 @@ function RunFooter({ timeline, run }: { timeline: AgentTimeline; run: AgentRunSu
   if (status === "failed" || status === "crashed") {
     return (
       <p className="text-xs text-destructive" role="status">
-        {RUN_STATUS_LABEL[status]}
+        {t(RUN_STATUS_LABEL[status])}
         {run?.reason ? `: ${run.reason}` : null}
       </p>
     );
   }
   if (status === "idle") {
-    return <p className="text-xs text-muted-foreground">Waiting for a follow-up.</p>;
+    return <p className="text-xs text-muted-foreground">{t("Waiting for a follow-up.")}</p>;
   }
   return null;
 }

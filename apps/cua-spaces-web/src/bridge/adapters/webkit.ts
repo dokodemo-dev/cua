@@ -265,6 +265,7 @@ export function toSettingsSnapshot(s: WkSettings, page: Pick<SettingsValues, "th
   return {
     values: {
       theme: page.theme,
+      ...(s.language ? { language: s.language } : {}),
       hotkey: page.hotkey,
       menuBar: active(rows.get("notch")) === "hide",
       telemetry: telemetryOn,
@@ -553,6 +554,9 @@ export function createWebkitAdapter(
         case "theme":
           setTheme(value as SettingsValues["theme"]);
           break;
+        case "language":
+          await choose("language", String(value));
+          break;
         case "hotkey":
           page.hotkey = String(value);
           break;
@@ -725,7 +729,7 @@ export function createWebkitAdapter(
     listNotice: () => rosterError,
     hostNotice: () => daemonNotice,
     dispose() {
-      for (const fail of [...pending]) fail(new HostError("the bridge was closed", "closed"));
+      for (const fail of pending) fail(new HostError("the bridge was closed", "closed"));
       events.clear();
       stopEvents();
       stopDragRegions?.();

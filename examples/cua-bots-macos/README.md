@@ -89,6 +89,14 @@ hides from the text:
 The rules are instructions, not enforcement: the harness runs with its
 permissions auto-approved inside the bot's own Space. See the gaps below.
 
+## Display language
+
+The app's Settings window offers System, Japanese and English. It shares the
+[display-language catalog and preference](../../libs/cua-localization/README.md)
+with Cua Spaces. The initial translation covers the sidebar, new-bot flow and
+main harness settings; detailed pages still fall back to English. This setting
+does not change agent prompts or translate existing conversations.
+
 ## Tests and screenshots
 
 ```sh

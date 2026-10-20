@@ -61,6 +61,8 @@ export type AppearanceTheme = "system" | "light" | "dark";
 export interface SettingsValues {
   /** Light, dark or follow the system. UI storage key `cua.settings.appearance`. */
   theme: AppearanceTheme;
+  /** Display-only preference; absent on older hosts. */
+  language?: "system" | "ja" | "en";
   /** The menu bar item is the entry point instead of the notch. */
   menuBar: boolean;
   /** The global hotkey, as glyphs (`⌘⇧Space`). */
@@ -149,6 +151,7 @@ export const DEFAULT_SETTINGS: SettingsValues = {
 /** UI-only settings live in the shell's UI storage under these keys. */
 export const UI_STORAGE_KEYS = {
   theme: "cua.settings.appearance",
+  language: "cua.settings.language",
   menuBar: "cua.settings.menuBar",
   hotkey: "cua.settings.hotkey",
 } as const;

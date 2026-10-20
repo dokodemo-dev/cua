@@ -319,6 +319,7 @@ export interface WkSettingsRow {
 
 /** `settings.get`, `settings.choose`, `settings.press`: the core's Settings page. */
 export interface WkSettings {
+  language?: "system" | "ja" | "en";
   page: { title: string; sections: { id: string; rows: WkSettingsRow[] }[] };
   /** `AppSettings.updateChannel` (`stable` or `beta`); null while the build
    * has no updater. Set with `settings.choose {row: "update-channel"}`. */

@@ -8,19 +8,19 @@ struct HarnessSettings: View {
   @Binding var runtime: BotRuntime
 
   var body: some View {
-    Picker("Agent", selection: $harness) {
+    Picker(model.displayText("Agent"), selection: $harness) {
       ForEach(model.harnesses) { entry in Text(entry.name).tag(entry.harness) }
       if !model.harnesses.contains(where: { $0.id == harness.id }) {
         Text("\(harness.name) (saved ID)").tag(harness)
       }
     }
-    TextField("Model (blank: harness default)", text: $runtime.model)
-    TextField("Guest working directory (blank: bot home)", text: $runtime.workingDirectory)
+    TextField(model.displayText("Model (blank: harness default)"), text: $runtime.model)
+    TextField(model.displayText("Guest working directory (blank: bot home)"), text: $runtime.workingDirectory)
     if harness == .pi {
-      TextField("Pi provider (blank: configured default)", text: $runtime.provider)
+      TextField(model.displayText("Pi provider (blank: configured default)"), text: $runtime.provider)
       TextField(
-        "Guest Pi agent directory (blank: isolated bot config)", text: $runtime.piAgentDirectory)
-      TextField("Additional system prompt", text: $runtime.systemPrompt, axis: .vertical)
+        model.displayText("Guest Pi agent directory (blank: isolated bot config)"), text: $runtime.piAgentDirectory)
+      TextField(model.displayText("Additional system prompt"), text: $runtime.systemPrompt, axis: .vertical)
         .lineLimit(2...5)
       Text(
         "Skills, extensions, custom tools and models.json are read from the guest Pi directory. No Mac settings or keys are copied."
@@ -65,8 +65,8 @@ struct HarnessSettingsSheet: View {
       if let error { Text(error).foregroundStyle(.red) }
       HStack {
         Spacer()
-        Button("Cancel") { dismiss() }.disabled(saving)
-        Button("Save") {
+        Button(model.displayText("Cancel")) { dismiss() }.disabled(saving)
+        Button(model.displayText("Save")) {
           saving = true
           Task {
             if await model.store.configure(bot.id, harness: harness, runtime: runtime) {

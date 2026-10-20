@@ -26,6 +26,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../libs/spaces-sdk-swift"),
+        .package(path: "../../libs/cua-localization"),
         .package(name: "Cua", path: "../../libs/cua/swift"),
         .package(name: "CuaSpacesApp", path: "../../libs/spaces-app-swift"),
     ],
@@ -46,6 +47,7 @@ let package = Package(
         .executableTarget(
             name: "CuaBots",
             dependencies: ["CuaBotsCore", "CuaBotsUI", "CuaBotsCua",
+                           .product(name: "CuaLocalization", package: "cua-localization"),
                            .product(name: "CuaSpaces", package: "spaces-sdk-swift"),
                            .product(name: "CuaSpacesStreaming", package: "CuaSpacesApp"),
                            .product(name: "CuaSpacesFFI", package: "CuaSpacesApp"),

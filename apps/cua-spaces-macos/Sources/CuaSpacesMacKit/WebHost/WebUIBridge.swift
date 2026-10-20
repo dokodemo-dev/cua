@@ -306,7 +306,10 @@ final class WebUIBridge: NSObject, WKScriptMessageHandlerWithReply {
         case "settings.get": return settings()
         case "settings.choose":
             let row = try string(args, "row"), option = try string(args, "option")
-            if row == "update-channel" {
+            if row == "language" {
+                try model.setDisplayLanguage(option)
+                host?.emit("settings.changed")
+            } else if row == "update-channel" {
                 // Settings → About's channel (saved in `AppSettings`).
                 guard model.updates.updater != nil else { throw Failure.unsupported("Updates are off in this build") }
                 model.updates.choose(channel: option)
@@ -492,6 +495,7 @@ final class WebUIBridge: NSObject, WKScriptMessageHandlerWithReply {
     func settings() -> [String: Any] {
         [
             "page": BridgeValue.encode(model.settingsPageWithStorage),
+            "language": model.languagePreference,
             "experiments": BridgeValue.encode(model.experimentsPage),
             // Settings → About's channel; null while this build has no updater.
             "updateChannel": model.updates.updater == nil ? NSNull() : (model.updates.channel == .beta ? "beta" : "stable"),
@@ -998,7 +1002,7 @@ final class WebUIBridge: NSObject, WKScriptMessageHandlerWithReply {
         follow("session.changed") { [model] in
             _ = (model.identity, model.signIn, model.cloudConfigured, model.onboarding.completed)
         }
-        follow("settings.changed") { [model] in _ = model.settings }
+        follow("settings.changed") { [model] in _ = (model.settings, model.languagePreference) }
         // These views are rewritten on every read, so the event goes out
         // only when what the page shows differs.
         followChanges("machines.changed") { [weak self] in

@@ -8,6 +8,7 @@ import CuaBotsCua
 import CuaSpaces
 import CuaSpacesFFI
 import CuaSpacesStreaming
+import CuaLocalization
 import Foundation
 import SwiftUI
 import UserNotifications
@@ -60,6 +61,15 @@ final class AppModel: ObservableObject, Notifier {
     @Published var streams: [String: LiveStreamSession] = [:]
     @Published var engineError: String?
     let pips = PiPControllers()
+
+    @Published var languagePreference = DisplayLanguage.load()
+    func displayText(_ key: String, _ args: [String: String] = [:]) -> String {
+        Translator(preference: languagePreference).text(key, args)
+    }
+    func setDisplayLanguage(_ value: String) throws {
+        try DisplayLanguage.save(value)
+        languagePreference = value
+    }
 
     private var cancellable: AnyCancellable?
 

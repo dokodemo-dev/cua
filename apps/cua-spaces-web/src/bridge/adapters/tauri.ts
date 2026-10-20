@@ -156,6 +156,7 @@ export function createTauriAdapter(win: HostWindow = globalThis.window as HostWi
         theme: theme === "light" || theme === "dark" || theme === "system" ? (theme as AppearanceTheme) : DEFAULT_SETTINGS.theme,
         menuBar: menuBar === undefined ? DEFAULT_SETTINGS.menuBar : menuBar === "true",
         hotkey: readUi(UI_STORAGE_KEYS.hotkey) ?? DEFAULT_SETTINGS.hotkey,
+        language: readUi(UI_STORAGE_KEYS.language) === "ja" ? "ja" : readUi(UI_STORAGE_KEYS.language) === "en" ? "en" : "system",
         telemetry: telemetry?.enabled ?? DEFAULT_SETTINGS.telemetry,
         defaultLocation: location?.value ?? DEFAULT_SETTINGS.defaultLocation,
         launchAtLogin: loginItemOn(loginItem),
@@ -207,6 +208,10 @@ export function createTauriAdapter(win: HostWindow = globalThis.window as HostWi
           break;
         case "menuBar":
           await writeUi(UI_STORAGE_KEYS.menuBar, JSON.stringify(Boolean(value)));
+          break;
+        case "language":
+          if (value !== "ja" && value !== "en" && value !== "system") throw new Error("Invalid display language");
+          await writeUi(UI_STORAGE_KEYS.language, value);
           break;
         case "hotkey":
           await writeUi(UI_STORAGE_KEYS.hotkey, String(value));

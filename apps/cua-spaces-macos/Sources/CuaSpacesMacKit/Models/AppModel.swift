@@ -4,6 +4,7 @@
 import AppKit
 import CuaSDK
 import CuaSpacesFFI
+import CuaLocalization
 import Foundation
 import Observation
 
@@ -52,6 +53,16 @@ public struct DetailRequest: Equatable {
 @MainActor
 @Observable
 public final class AppModel {
+    public var languagePreference: String
+    private let languageFileURL: URL
+    public func displayText(_ key: String, _ args: [String: String] = [:]) -> String {
+        Translator(preference: languagePreference).text(key, args)
+    }
+    public func setDisplayLanguage(_ value: String) throws {
+        try DisplayLanguage.save(value, to: languageFileURL)
+        languagePreference = value
+    }
+
     public let backend: SpacesBackend
     /// The launch until the live services are in (ready at once for
     /// fixtures and tests): the window shows it instead of its content.
@@ -171,7 +182,10 @@ public final class AppModel {
                 telemetry: TelemetryRunning? = nil, agentSetup: AgentSetupRunning? = nil,
                 billing: BillingRunning? = nil, devices: DevicesRunning? = nil,
                 presence: PresenceChecking = LivePresence(), loginItem: LoginItemControlling? = nil,
-                startup: StartupModel? = nil, appVersion: String? = nil) {
+                startup: StartupModel? = nil, appVersion: String? = nil,
+                languageFileURL: URL = DisplayLanguage.fileURL) {
+        self.languageFileURL = languageFileURL
+        self.languagePreference = DisplayLanguage.load(from: languageFileURL)
         self.backend = backend
         self.startup = startup ?? StartupModel()
         self.devices = DevicesModel(devices: devices, presence: presence)

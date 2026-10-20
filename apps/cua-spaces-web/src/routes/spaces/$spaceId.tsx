@@ -22,6 +22,7 @@ import { toast } from "@/components/ui/toast";
 import { thisComputerText } from "@/lib/host-labels";
 import { useSpaceVolumeError } from "@/lib/space-volume";
 import { volumeUnavailableNote } from "@/lib/volume-notes";
+import { useI18n } from "@/lib/i18n";
 import { canDelete, canPower, createError, createProgress, machineName, powerLabel, powerPending, spacePlace, spaceState } from "@/lib/spaces";
 
 export const Route = createFileRoute("/spaces/$spaceId")({
@@ -38,6 +39,7 @@ type Confirm = "stop" | "delete" | null;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 function SpaceDetailPage() {
+  const { t } = useI18n();
   const { spaceId } = Route.useParams();
   const { dropped } = Route.useSearch();
   const navigate = useNavigate();
@@ -110,14 +112,14 @@ function SpaceDetailPage() {
         <BackLink />
         <EmptyState
           icon={<MonitorIcon />}
-          title={error ? "Couldn't load this Space" : "This Space isn't here"}
+          title={t(error ? "Couldn't load this Space" : "This Space isn't here")}
           action={
             <Button variant="outline" render={<Link to="/spaces" />}>
-              Back to Spaces
+              {t("Back to Spaces")}
             </Button>
           }
         >
-          {error ? error.message : "It may have been deleted, or it runs on a computer this app can't see."}
+          {error ? error.message : t("It may have been deleted, or it runs on a computer this app can't see.")}
         </EmptyState>
       </Page>
     );
@@ -128,8 +130,8 @@ function SpaceDetailPage() {
   const machine = machineName(machines, space);
   const pending = powerPending(space);
   // "Turn on" / "Turn off" (or Resume / Suspend), the SwiftUI app's words.
-  const turnOn = powerLabel(core, space, true);
-  const turnOff = powerLabel(core, space, false);
+  const turnOn = t(powerLabel(core, space, true));
+  const turnOff = t(powerLabel(core, space, false));
 
   const run = (label: string, action: () => Promise<void>) =>
     action().catch((e: unknown) => toast(`Couldn't ${label} ${space.name}`, { description: message(e), type: "error" }));
@@ -231,13 +233,13 @@ function SpaceDetailPage() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {teleportAction ? (
-            <Button variant="outline" disabled={!teleportAction.enabled} title={teleportAction.help} onClick={teleportApp}>
-              <ArrowDownCircleIcon /> {teleportAction.label}
+            <Button variant="outline" disabled={!teleportAction.enabled} title={t(teleportAction.help)} onClick={teleportApp}>
+              <ArrowDownCircleIcon /> {t(teleportAction.label)}
             </Button>
           ) : null}
           {shareAction ? (
-            <Button variant="outline" data-share-space="" disabled={!shareAction.enabled} title={shareAction.help} onClick={share}>
-              <UserPlusIcon /> {shareAction.label}
+            <Button variant="outline" data-share-space="" disabled={!shareAction.enabled} title={t(shareAction.help)} onClick={share}>
+              <UserPlusIcon /> {t(shareAction.label)}
             </Button>
           ) : null}
           {canPower(space) ? (
@@ -253,12 +255,12 @@ function SpaceDetailPage() {
           ) : null}
           {state === "failed" ? (
             <Button variant="outline" data-dismiss-create="" onClick={dismiss}>
-              <Trash2Icon className="text-destructive" /> Remove
+              <Trash2Icon className="text-destructive" /> {t("Remove")}
             </Button>
           ) : null}
           {canDelete(space) ? (
             <Button variant="outline" aria-label={`${detail.deleteLabel} ${space.name}`} onClick={() => setConfirm("delete")}>
-              <Trash2Icon className="text-destructive" /> {detail.deleteLabel}
+              <Trash2Icon className="text-destructive" /> {t(detail.deleteLabel)}
             </Button>
           ) : null}
         </div>
@@ -290,7 +292,7 @@ function SpaceDetailPage() {
 
       <div className="mt-8 grid items-start gap-x-6 md:grid-cols-2">
         <div>
-          <FactList title="Details" facts={detail.facts} />
+          <FactList title={t("Details")} facts={detail.facts} />
           {volumeError ? (
             <p className="mt-3 px-1 text-[13px] text-muted-foreground" data-volume-note="" title={volumeError}>
               {volumeUnavailableNote(volumeError)}
@@ -299,7 +301,7 @@ function SpaceDetailPage() {
           {showTeleport ? (
             <div className="mt-7">
               <DropWell
-                title="Teleport"
+                title={t("Teleport")}
                 space={space}
                 copy={{ caption: copy?.dropCaption ?? "Drop a file or window", sendFile: copy?.sendFile ?? "Send file…", teleportApp: copy?.teleportApp ?? "Teleport an app…" }}
                 onTeleport={teleportApp}
@@ -310,7 +312,7 @@ function SpaceDetailPage() {
         <div>
           {showStream ? (
             <StreamSection
-              title="Stream"
+              title={t("Stream")}
               section={stream}
               query={query}
               onQuery={setQuery}
@@ -320,13 +322,13 @@ function SpaceDetailPage() {
           ) : null}
           {showAgents ? (
             <AgentsSection
-              title="Agents"
+              title={t("Agents")}
               runs={agents.runs}
               failed={agents.failed}
               copy={{
-                loading: copy?.agentsLoading ?? "Looking for this Space’s agents…",
-                empty: copy?.agentsEmpty ?? "No agents have been started in this Space.",
-                failed: copy?.agentsFailed ?? "Could not read this Space’s agents.",
+                loading: t(copy?.agentsLoading ?? "Looking for this Space’s agents…"),
+                empty: t(copy?.agentsEmpty ?? "No agents have been started in this Space."),
+                failed: t(copy?.agentsFailed ?? "Could not read this Space’s agents."),
               }}
             />
           ) : null}
@@ -336,11 +338,11 @@ function SpaceDetailPage() {
       <ConfirmDialog
         open={confirm === "stop"}
         onOpenChange={(o) => !o && setConfirm(null)}
-        title={`${turnOff} ${space.name}?`}
+        title={t("{action} {name}?", { action: turnOff, name: space.name })}
         description={
           space.power?.control === "suspend"
-            ? "It's suspended in memory and picks up where it left off when you start it again."
-            : "It shuts down. Anything unsaved inside it is lost."
+            ? t("It's suspended in memory and picks up where it left off when you start it again.")
+            : t("It shuts down. Anything unsaved inside it is lost.")
         }
         confirmLabel={turnOff}
         destructive={space.power?.control !== "suspend"}

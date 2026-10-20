@@ -42,7 +42,7 @@ public struct MainWindow: View {
                 Button {
                     Task { await model.openNewSpace() }
                 } label: {
-                    Label(chrome.newSpaceLabel, systemImage: "plus")
+                    Label(model.displayText(chrome.newSpaceLabel), systemImage: "plus")
                 }
                 .keyboardShortcut("n", modifiers: .command)
                 .help(chrome.newSpaceLabel)
@@ -197,13 +197,13 @@ struct Sidebar: View {
                 KeyvaultHeader(keyvault: kv, title: model.chrome.keyvaultTitle)
             }
             Section {
-                Label("Computers", systemImage: "server.rack").tag(MainSelection.machines)
-                Label("Agents", systemImage: "person.2").tag(MainSelection.agents)
+                Label(model.displayText("Computers"), systemImage: "server.rack").tag(MainSelection.machines)
+                Label(model.displayText("Agents"), systemImage: "person.2").tag(MainSelection.agents)
                 // Only with the Cua Volume experiment on (the core's chrome).
                 if let volume = model.chrome.volumeLabel {
-                    Label(volume, systemImage: "externaldrive").tag(MainSelection.drive)
+                    Label(model.displayText(volume), systemImage: "externaldrive").tag(MainSelection.drive)
                 }
-                Label("Notifications", systemImage: "bell").tag(MainSelection.notifications)
+                Label(model.displayText("Notifications"), systemImage: "bell").tag(MainSelection.notifications)
             }
         }
         .listStyle(.sidebar)
@@ -253,8 +253,8 @@ struct SidebarFooter: View {
                 Image(systemName: "gearshape")
             }
             .buttonStyle(.borderless)
-            .help(chrome.settingsLabel)
-            .accessibilityLabel(chrome.settingsLabel)
+            .help(model.displayText(chrome.settingsLabel))
+            .accessibilityLabel(model.displayText(chrome.settingsLabel))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

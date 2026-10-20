@@ -10,6 +10,7 @@ import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "@/component
 import { Segmented } from "@/components/ui/segmented";
 import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * What the cua MCP server is and how an agent gets it: the agents on this
@@ -46,6 +47,7 @@ const MANUAL: Record<Manual, { label: string; file: string; snippet: string }> =
 const MANUAL_OPTIONS = (Object.keys(MANUAL) as Manual[]).map((value) => ({ value, label: MANUAL[value].label }));
 
 export function ConnectAgentDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useI18n();
   const { agentSetup, configureAgents } = useAgents();
   const [rows, setRows] = useState<AgentSetupRow[] | null>(null);
   const [detectError, setDetectError] = useState<string | null>(null);
@@ -77,9 +79,9 @@ export function ConnectAgentDialog({ open, onOpenChange }: { open: boolean; onOp
     configureAgents()
       .then((r) => {
         setRows(r);
-        toast("Agents set up", { description: "Restart an agent that is already open so it loads the server." });
+        toast(t("Agents set up"), { description: t("Restart an agent that is already open so it loads the server.") });
       })
-      .catch((e: unknown) => toast("Couldn't set up agents", { description: e instanceof Error ? e.message : String(e) }))
+      .catch((e: unknown) => toast(t("Couldn't set up agents"), { description: e instanceof Error ? e.message : String(e) }))
       .finally(() => setBusy(false));
   };
 
@@ -87,27 +89,26 @@ export function ConnectAgentDialog({ open, onOpenChange }: { open: boolean; onOp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="top-[8vh] w-[min(600px,calc(100vw-2rem))] bg-popover">
         <div className="max-h-[84vh] overflow-y-auto px-6 pt-5 pb-6">
-          <DialogTitle className="text-[15px] font-semibold">Connect an agent</DialogTitle>
+          <DialogTitle className="text-[15px] font-semibold">{t("Connect an agent")}</DialogTitle>
           <DialogDescription className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-            Coding agents reach Cua through the cua MCP server (<code className="font-mono text-xs">cua mcp</code>) and the cua skills.
-            Once an agent has them, it can create Spaces, work inside them and start persistent agents. Its runs then show up on this page.
+            {t("Coding agents reach Cua through the cua MCP server and the cua skills. Once an agent has them, it can create Spaces, work inside them and start persistent agents. Its runs then show up on this page.")}
           </DialogDescription>
 
           <section className="mt-5">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-xs font-semibold">On this computer</h3>
+              <h3 className="text-xs font-semibold">{t("On this computer")}</h3>
               {rows && rows.length > 0 ? (
                 <Button size="sm" variant={pending.length ? "default" : "outline"} disabled={busy || pending.length === 0} onClick={setUpAll}>
-                  {busy ? "Setting up…" : pending.length ? `Set up ${pending.length === 1 ? "1 agent" : `${pending.length} agents`}` : "All set up"}
+                  {busy ? t("Setting up…") : pending.length ? t(pending.length === 1 ? "Set up {count} agent" : "Set up {count} agents", { count: String(pending.length) }) : t("All set up")}
                 </Button>
               ) : null}
             </div>
             <div className="overflow-hidden rounded-lg border">
               {rows === null ? (
-                <p className="px-3 py-3 text-xs text-muted-foreground">Looking for agents…</p>
+                <p className="px-3 py-3 text-xs text-muted-foreground">{t("Looking for agents…")}</p>
               ) : rows.length === 0 ? (
                 <p className="px-3 py-3 text-xs text-muted-foreground">
-                  {detectError ?? "This app can't look for agents here. Run cua agents setup in a terminal, or add the server by hand below."}
+                  {detectError ?? t("This app can't look for agents here. Run cua agents setup in a terminal, or add the server by hand below.")}
                 </p>
               ) : (
                 <ul className="divide-y">
@@ -118,23 +119,22 @@ export function ConnectAgentDialog({ open, onOpenChange }: { open: boolean; onOp
               )}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Setting up edits each agent's own config and keeps everything else in it. <code className="font-mono">cua agents setup</code> in a terminal does the
-              same, and <code className="font-mono">cua agents remove</code> undoes it.
+              {t("Setting up edits each agent's own config and keeps everything else in it. Running cua agents setup in a terminal does the same, and cua agents remove undoes it.")}
             </p>
           </section>
 
           <section className="mt-6">
-            <h3 className="mb-2 text-xs font-semibold">Add it by hand</h3>
+            <h3 className="mb-2 text-xs font-semibold">{t("Add it by hand")}</h3>
             <Segmented aria-label="Agent" value={manual} options={MANUAL_OPTIONS} onValueChange={setManual} />
             <Snippet file={MANUAL[manual].file} text={MANUAL[manual].snippet} />
             <p className="mt-2 text-xs text-muted-foreground">
-              Use the full path to <code className="font-mono">cua</code> if the agent runs without your shell's PATH, as apps opened from the Dock do.
+              {t("Use the full path to cua if the agent runs without your shell's PATH, as apps opened from the Dock do.")}
             </p>
           </section>
 
           <div className="mt-6 flex justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Done
+              {t("Done")}
             </Button>
           </div>
         </div>
@@ -144,6 +144,7 @@ export function ConnectAgentDialog({ open, onOpenChange }: { open: boolean; onOp
 }
 
 function SetupRow({ row }: { row: AgentSetupRow }) {
+  const { t } = useI18n();
   return (
     <li className="flex items-center gap-3 px-3 py-2">
       <div className="min-w-0 flex-1">
@@ -152,7 +153,7 @@ function SetupRow({ row }: { row: AgentSetupRow }) {
       </div>
       <span className={cn("inline-flex shrink-0 items-center gap-1 text-xs", row.configured ? "text-foreground" : "text-muted-foreground")}>
         {row.configured ? <CheckIcon className="size-3.5 text-success" aria-hidden /> : null}
-        {!row.installed ? "Not installed" : row.configured ? "Set up" : "Not set up"}
+        {!row.installed ? t("Not installed") : row.configured ? t("Set up") : t("Not set up")}
       </span>
     </li>
   );

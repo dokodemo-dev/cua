@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useI18n } from "@/lib/i18n";
 
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -32,6 +33,7 @@ export function AgentPanel({ tab, detail }: { tab: AgentTab; detail: AgentDetail
 }
 
 function Memory({ view, detail }: { view: AgentDetailView; detail: AgentDetailHook }) {
+  const { t } = useI18n();
   const { act, busy } = detail;
   const f = view.file;
   if (f) {
@@ -48,14 +50,14 @@ function Memory({ view, detail }: { view: AgentDetailView; detail: AgentDetailHo
           ))}
         </Section>
         <Button variant="outline" size="sm" onClick={() => act({ type: "close-file" })} data-agent-file-close="">
-          {f.closeLabel}
+          {t(f.closeLabel)}
         </Button>
       </>
     );
   }
   return (
     <Section kind="memory">
-      {view.memory.length === 0 ? <Empty>{view.memoryEmpty}</Empty> : null}
+      {view.memory.length === 0 ? <Empty>{t(view.memoryEmpty)}</Empty> : null}
       {view.memory.map((l) => (
         <Line key={l.id} line={l} busy={busy} onOpen={() => act({ type: "open-file", path: l.id })} />
       ))}
@@ -64,9 +66,10 @@ function Memory({ view, detail }: { view: AgentDetailView; detail: AgentDetailHo
 }
 
 function Routines({ view, detail }: { view: AgentDetailView; detail: AgentDetailHook }) {
+  const { t } = useI18n();
   const { act, busy } = detail;
   const form = view.form;
-  const schedules = view.schedules.map((s) => ({ value: s.id as RoutineScheduleKind, label: s.text }));
+  const schedules = view.schedules.map((s) => ({ value: s.id as RoutineScheduleKind, label: t(s.text) }));
   return (
     <>
       <Section kind="routines">
@@ -82,17 +85,17 @@ function Routines({ view, detail }: { view: AgentDetailView; detail: AgentDetail
         ))}
       </Section>
       <Section kind="new-routine">
-        <Field label="Title">
+        <Field label={t("Title")}>
           <Input value={form.title} onValueChange={(title) => act({ type: "set-title", title })} data-routine-title="" />
         </Field>
-        <Field label="Prompt">
+        <Field label={t("Prompt")}>
           <Input value={form.prompt} onValueChange={(prompt) => act({ type: "set-prompt", prompt })} data-routine-prompt="" />
         </Field>
-        <Field label="Schedule">
-          <Select aria-label="Schedule" value={form.schedule} options={schedules} onValueChange={(schedule) => act({ type: "set-schedule", schedule })} />
+        <Field label={t("Schedule")}>
+          <Select aria-label={t("Schedule")}  value={form.schedule} options={schedules} onValueChange={(schedule) => act({ type: "set-schedule", schedule })} />
         </Field>
         {form.schedule === "every" ? (
-          <Field label="Minutes">
+          <Field label={t("Minutes")}>
             <Input
               type="number"
               min={1}
@@ -104,13 +107,13 @@ function Routines({ view, detail }: { view: AgentDetailView; detail: AgentDetail
             />
           </Field>
         ) : (
-          <Field label="Time">
+          <Field label={t("Time")}>
             <Input type="time" className="w-32" value={form.time} onValueChange={(time) => act({ type: "set-time", time })} data-routine-time="" />
           </Field>
         )}
         {form.schedule === "weekly" ? (
-          <Field label="Day">
-            <Select aria-label="Day" value={form.weekday} options={WEEKDAYS.map((d) => ({ value: d, label: d }))} onValueChange={(weekday) => act({ type: "set-weekday", weekday })} />
+          <Field label={t("Day")}>
+            <Select aria-label={t("Day")}  value={form.weekday} options={WEEKDAYS.map((d) => ({ value: d, label: d }))} onValueChange={(weekday) => act({ type: "set-weekday", weekday })} />
           </Field>
         ) : null}
         <div className="flex justify-end px-4 py-2.5">
@@ -124,6 +127,7 @@ function Routines({ view, detail }: { view: AgentDetailView; detail: AgentDetail
 }
 
 function Access({ view, detail }: { view: AgentDetailView; detail: AgentDetailHook }) {
+  const { t } = useI18n();
   const { act, busy, thisMachine } = detail;
   return (
     <>
@@ -141,7 +145,7 @@ function Access({ view, detail }: { view: AgentDetailView; detail: AgentDetailHo
         ) : null}
       </Section>
       {view.audit.length > 0 ? (
-        <Section title="Audit" kind="audit">
+        <Section title={t("Audit")} kind="audit">
           {view.audit.map((l) => (
             <Line key={l.id} line={l} busy={busy} />
           ))}
@@ -175,6 +179,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 /** A `LineView`: its text (a link when it opens), a muted trailing part, a switch and a button. */
 function Line({ line, busy, onOpen, onToggle, onAction }: { line: AgentLineView; busy: boolean; onOpen?: () => void; onToggle?: () => void; onAction?: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="flex min-h-11 items-center gap-4 px-4 py-2" data-agent-line={line.id}>
       {onOpen ? (
@@ -203,7 +208,7 @@ function Line({ line, busy, onOpen, onToggle, onAction }: { line: AgentLineView;
       ) : null}
       {line.actionLabel && onAction ? (
         <Button variant="outline" size="sm" disabled={busy} onClick={onAction} data-line-action="">
-          {line.actionLabel}
+          {t(line.actionLabel)}
         </Button>
       ) : null}
     </div>

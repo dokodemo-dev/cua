@@ -32,10 +32,12 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { lazy, Suspense } from "react";
 import { toastError } from "@/components/ui/toast";
-import { globalShortcutLine, showsMacShellSettings, thisComputerLabel } from "@/lib/host-labels";
+import { showsMacShellSettings, thisComputerLabel } from "@/lib/host-labels";
 import { keyvaultRows } from "@/lib/keyvault";
 import { DEFAULT_KEYBINDINGS, type KeybindingCommand } from "@/lib/keybindings";
 import { useTheme, type ThemePreference } from "@/lib/theme";
+import { LanguageRow } from "@/components/settings/language-row";
+import { useI18n } from "@/lib/i18n";
 
 export const Route = createFileRoute("/settings/")({ component: SettingsPage });
 
@@ -53,10 +55,10 @@ const COMMAND_LABEL: Record<KeybindingCommand, string> = {
   "theme.cycle": "Cycle appearance",
 };
 
-const APPEARANCE: { value: ThemePreference; label: React.ReactNode }[] = [
-  { value: "system", label: <><MonitorIcon className="size-3.5" /> System</> },
-  { value: "light", label: <><SunIcon className="size-3.5" /> Light</> },
-  { value: "dark", label: <><MoonIcon className="size-3.5" /> Dark</> },
+const appearanceOptions = (t: (key: string) => string): { value: ThemePreference; label: React.ReactNode }[] => [
+  { value: "system", label: <><MonitorIcon className="size-3.5" /> {t("System")}</> },
+  { value: "light", label: <><SunIcon className="size-3.5" /> {t("Light")}</> },
+  { value: "dark", label: <><MoonIcon className="size-3.5" /> {t("Dark")}</> },
 ];
 
 const fail = toastError;
@@ -71,6 +73,7 @@ function SettingsPage() {
 }
 
 function CoreGeneralPage({ page }: { page: CorePage }) {
+  const { t } = useI18n();
   const { data: settings, updateSetting, chooseSetting } = useSettings();
   const { signIn, signOut, cancelSignIn, openExternal } = useSession();
   const { mode } = useBridge();
@@ -143,10 +146,11 @@ function CoreGeneralPage({ page }: { page: CorePage }) {
       ) : null}
 
       <SettingsGroup title={general?.title ?? "General"}>
+        <LanguageRow />
         <LaunchAtLoginRows />
         {/* The notch is the macOS app's. */}
         {general ? rows(general, (r) => r.id === "notch" && !mac) : null}
-        <SettingsRow label="Appearance" control={<Segmented aria-label="Appearance" value={preference} options={APPEARANCE} onValueChange={setPreference} />} />
+        <SettingsRow label="Appearance" control={<Segmented aria-label={t("Appearance")} value={preference} options={appearanceOptions(t)} onValueChange={setPreference} />} />
         <GlobalShortcutRow shortcut={settings?.globalShortcut} />
       </SettingsGroup>
 
@@ -167,7 +171,7 @@ function CoreGeneralPage({ page }: { page: CorePage }) {
 
       <SettingsGroup title="Keyboard shortcuts">
         {DEFAULT_KEYBINDINGS.map((b) => (
-          <SettingsRow key={b.command} label={COMMAND_LABEL[b.command]} control={<Shortcut spec={b.key} />} />
+          <SettingsRow key={b.command} label={t(COMMAND_LABEL[b.command])} control={<Shortcut spec={b.key} />} />
         ))}
       </SettingsGroup>
 
@@ -178,12 +182,16 @@ function CoreGeneralPage({ page }: { page: CorePage }) {
 
 /** The host's global shortcut (the macOS hosts register one), and whether the system gave it. */
 function GlobalShortcutRow({ shortcut }: { shortcut: GlobalShortcut | null | undefined }) {
+  const { t } = useI18n();
   if (!shortcut) return null;
+  const description = shortcut.registered
+    ? t("Brings Cua Spaces to the front from any app.")
+    : t("Another app is using {shortcut}, so it does nothing here. Free it in that app, then open Settings again.", { shortcut: shortcut.label });
   return (
     <div data-global-shortcut={shortcut.registered ? "registered" : "taken"}>
       <SettingsRow
         label="Global shortcut"
-        description={globalShortcutLine(shortcut)}
+        description={description}
         control={<span className="text-[13px] text-muted-foreground">{shortcut.label}</span>}
       />
     </div>
@@ -255,6 +263,7 @@ function RelayUsageRow() {
 
 /** Without the core: the settings every host has, drawn by hand. */
 function FallbackSettingsPage() {
+  const { t } = useI18n();
   const { data: settings, updateSetting } = useSettings();
   const { data: machines = [] } = useMachines();
   const { data: session, signIn, signOut } = useSession();
@@ -262,7 +271,7 @@ function FallbackSettingsPage() {
 
   const values = settings?.values;
   const locationOptions = [
-    { value: "local", label: thisComputerLabel() },
+    { value: "local", label: t(thisComputerLabel()) },
     ...machines.filter((m) => !m.current).map((m) => ({ value: `host:${m.id}`, label: m.name })),
   ];
   const location = values?.defaultLocation ?? "local";
@@ -272,12 +281,13 @@ function FallbackSettingsPage() {
   return (
     <>
       <SettingsGroup title="General">
+        <LanguageRow />
         <LaunchAtLoginRows />
-        <SettingsRow label="Appearance" control={<Segmented aria-label="Appearance" value={preference} options={APPEARANCE} onValueChange={setPreference} />} />
+        <SettingsRow label="Appearance" control={<Segmented aria-label={t("Appearance")} value={preference} options={appearanceOptions(t)} onValueChange={setPreference} />} />
         {showsMacShellSettings() ? (
           <SettingsRow
             label="Show in menu bar"
-            description="Open Cua Spaces from the menu bar instead of the notch."
+            description={t("Open Cua Spaces from the menu bar instead of the notch.")}
             htmlFor="menuBar"
             control={
               <Switch
@@ -297,10 +307,12 @@ function FallbackSettingsPage() {
       <SettingsGroup title="Spaces">
         <SettingsRow
           label="New Spaces start on"
-          description={locationLocked ? `Set by ${settings?.defaultLocation?.env ?? "the environment"}.` : "You can pick another place when you create one."}
+          description={locationLocked
+            ? t("Set by {source}.", { source: settings?.defaultLocation?.env ?? t("the environment") })
+            : t("You can pick another place when you create one.")}
           control={
             <Select
-              aria-label="New Spaces start on"
+              aria-label={t("New Spaces start on")}
               value={location}
               options={locationOptions}
               onValueChange={(v) => void updateSetting("defaultLocation", v).catch(fail("Couldn't change the default location"))}
@@ -317,16 +329,16 @@ function FallbackSettingsPage() {
 
       <SettingsGroup title="Account">
         <SettingsRow
-          label={session?.signedIn ? (session.identity ?? "Signed in") : "Not signed in"}
-          description={session?.signIn.kind === "waiting" ? "Finish signing in from your browser." : session?.signIn.kind === "failed" ? session.signIn.message : undefined}
+          label={session?.signedIn ? (session.identity ?? t("Signed in")) : t("Not signed in")}
+          description={session?.signIn.kind === "waiting" ? t("Finish signing in from your browser.") : session?.signIn.kind === "failed" ? session.signIn.message : undefined}
           control={
             session?.signedIn ? (
               <Button variant="outline" size="sm" onClick={() => void signOut().catch(fail("Couldn't sign out"))}>
-                Sign out
+                {t("Sign out")}
               </Button>
             ) : (
               <Button variant="outline" size="sm" disabled={!session} onClick={() => void signIn().catch(fail("Couldn't start sign-in"))}>
-                Sign in
+                {t("Sign in")}
               </Button>
             )
           }
@@ -337,7 +349,7 @@ function FallbackSettingsPage() {
       <SettingsGroup title="Privacy">
         <SettingsRow
           label="Share usage data to help improve Cua"
-          description="Which features you use and when something goes wrong. Linked to your account through a random ID while you're signed in. Never your files, what you type or your screen."
+          description={t("Which features you use and when something goes wrong. Linked to your account through a random ID while you're signed in. Never your files, what you type or your screen.")}
           htmlFor="telemetry"
           control={
             <Switch
@@ -352,7 +364,7 @@ function FallbackSettingsPage() {
 
       <SettingsGroup title="Keyboard shortcuts">
         {DEFAULT_KEYBINDINGS.map((b) => (
-          <SettingsRow key={b.command} label={COMMAND_LABEL[b.command]} control={<Shortcut spec={b.key} />} />
+          <SettingsRow key={b.command} label={t(COMMAND_LABEL[b.command])} control={<Shortcut spec={b.key} />} />
         ))}
       </SettingsGroup>
     </>

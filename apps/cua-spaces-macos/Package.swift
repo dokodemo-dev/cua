@@ -32,6 +32,7 @@ let package = Package(
     ],
     dependencies: [
         .package(name: "Cua", path: "../../libs/cua/swift"),
+        .package(path: "../../libs/cua-localization"),
         .package(name: "CuaSpacesSDK", path: "../../libs/spaces-sdk-swift"),
         .package(name: "CuaSpacesApp", path: "../../libs/spaces-app-swift"),
         .package(name: "CuaSpacesNotch", path: "../../libs/spaces-notch-swift"),
@@ -48,6 +49,7 @@ let package = Package(
                 .product(name: "CuaSpacesTeleport", package: "CuaSpacesApp"),
                 .product(name: "CuaSpacesNotchUI", package: "CuaSpacesNotch"),
                 .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "CuaLocalization", package: "cua-localization"),
             ],
             path: "Sources/CuaSpacesMacKit",
             resources: [.process("Resources")],
