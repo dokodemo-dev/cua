@@ -3,45 +3,6 @@
 
 import Foundation
 
-/// The agent harness a bot runs on: the four `cua agents` persistent
-/// assistants and coding agents.
-public enum Harness: String, Codable, CaseIterable, Identifiable, Sendable {
-    case hermes
-    case openclaw
-    case codex = "openai-codex"
-    case claudeCode = "claude-code"
-
-    public var id: String { rawValue }
-
-    public var name: String {
-        switch self {
-        case .hermes: "Hermes"
-        case .openclaw: "OpenClaw"
-        case .codex: "Codex"
-        case .claudeCode: "Claude Code"
-        }
-    }
-
-    public var blurb: String {
-        switch self {
-        case .hermes: "A persistent assistant with its own memory"
-        case .openclaw: "A persistent assistant with standing orders"
-        case .codex: "A coding agent"
-        case .claudeCode: "A coding agent"
-        }
-    }
-
-    /// The file in the bot's home the harness reads its standing
-    /// instructions from.
-    public var instructionsFile: String {
-        switch self {
-        case .claudeCode: "CLAUDE.md"
-        case .hermes: "SOUL.md"
-        case .openclaw, .codex: "AGENTS.md"
-        }
-    }
-}
-
 /// Where a bot's own computer runs.
 public enum Placement: String, Codable, CaseIterable, Identifiable, Sendable {
     /// A Space on this Mac (a container under Docker or gVisor).
@@ -71,6 +32,8 @@ public struct Bot: Identifiable, Codable, Hashable, Sendable {
     public var avatar: AvatarConfig
     public var harness: Harness
     public var placement: Placement
+    /// Missing in legacy identities; nil preserves the old environment defaults.
+    public var runtime: BotRuntime?
     /// The bot's own Space (`local:bot-ada`), once created.
     public var spaceID: String?
     /// The current agent run in that Space.
@@ -90,13 +53,15 @@ public struct Bot: Identifiable, Codable, Hashable, Sendable {
     }
 
     public init(name: String, owner: String = Bot.defaultOwner, avatar: AvatarConfig? = nil,
-                harness: Harness = .hermes, placement: Placement = .local, createdAt: Date = Date()) {
+                harness: Harness = .pi, placement: Placement = .local, runtime: BotRuntime? = nil,
+                createdAt: Date = Date()) {
         self.id = Bot.agentName(for: name)
         self.name = name
         self.owner = owner
         self.avatar = avatar ?? .default(for: name)
         self.harness = harness
         self.placement = placement
+        self.runtime = runtime
         self.createdAt = createdAt
         self.isPaused = false
         self.status = "Getting set up"

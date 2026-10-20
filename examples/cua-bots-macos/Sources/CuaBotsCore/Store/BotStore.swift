@@ -50,6 +50,7 @@ public final class BotStore: ObservableObject {
     private var pollers: [String: Task<Void, Never>] = [:]
     private var currentTask: [String: String] = [:]
     private var busy: Set<String> = []
+    private var changing: Set<String> = []
 
     public init(volume: VolumeStore, dataDirectory: URL, engine: BotEngine? = nil) {
         self.volume = volume
@@ -70,7 +71,7 @@ public final class BotStore: ObservableObject {
     }
     public func approval(_ id: String) -> ApprovalRequest? { approvals.first { $0.id == id } }
     public var unreadCount: Int { notifications.filter { !$0.read }.count }
-    public func isBusy(_ id: String) -> Bool { busy.contains(id) }
+    public func isBusy(_ id: String) -> Bool { busy.contains(id) || changing.contains(id) }
 
     /// The bot's memory file, as the Volume has it.
     public func memory(for id: String) -> String {
@@ -88,8 +89,8 @@ public final class BotStore: ObservableObject {
     /// start its agent, which introduces itself.
     @discardableResult
     public func createBot(name: String, avatar: AvatarConfig, harness: Harness,
-                          placement: Placement) async -> Bot {
-        var bot = Bot(name: name, avatar: avatar, harness: harness, placement: placement)
+                          placement: Placement, runtime: BotRuntime? = nil) async -> Bot {
+        var bot = Bot(name: name, avatar: avatar, harness: harness, placement: placement, runtime: runtime)
         var n = 2
         while bots.contains(where: { $0.id == bot.id }) {
             bot.id = Bot.agentName(for: "\(name)-\(n)")
@@ -112,15 +113,23 @@ public final class BotStore: ObservableObject {
     }
 
     private func bringUp(_ id: String, firstPrompt: String) async {
-        guard let engine, var bot = bot(id) else { return }
+        guard let engine, var bot = bot(id), !changing.contains(id) else { return }
+        changing.insert(id)
+        defer { changing.remove(id) }
         do {
+            try bot.runtime?.validate()
             update(id) { $0.status = "Setting up"; $0.mood = .working }
-            let space = try await engine.provision(bot) { [weak self] phase in
-                guard let self else { return }
-                switch phase {
-                case .creatingSpace(let s): self.setupPhase[id] = s
-                case .startingAgent: self.setupPhase[id] = "Starting \(bot.harness.name)"
-                case .ready: self.setupPhase[id] = nil
+            let space: String
+            if let existing = bot.spaceID {
+                space = existing
+            } else {
+                space = try await engine.provision(bot) { [weak self] phase in
+                    guard let self else { return }
+                    switch phase {
+                    case .creatingSpace(let s): self.setupPhase[id] = s
+                    case .startingAgent: self.setupPhase[id] = "Starting \(bot.harness.name)"
+                    case .ready: self.setupPhase[id] = nil
+                    }
                 }
             }
             update(id) { $0.spaceID = space }
@@ -143,6 +152,48 @@ public final class BotStore: ObservableObject {
     }
 
     // MARK: - Customizing
+
+    /// Settings apply to a new run, never to an old harness session.
+    @discardableResult
+    public func configure(_ id: String, harness: Harness, runtime: BotRuntime) async -> Bool {
+        guard let bot = bot(id), !busy.contains(id), !changing.contains(id), setupPhase[id] == nil else {
+            lastError = "Wait for the bot's current turn to finish."
+            return false
+        }
+        do {
+            try runtime.validate()
+            if bot.harness == harness && (bot.runtime ?? BotRuntime()) == runtime { return true }
+            changing.insert(id)
+            defer { changing.remove(id) }
+            if bot.runID != nil {
+                guard let engine else { throw CocoaError(.featureUnsupported) }
+                try await engine.stop(bot)
+            }
+            pollers[id]?.cancel()
+            pollers[id] = nil
+            cursors[id] = nil
+            turnText[id] = nil
+            update(id) {
+                $0.harness = harness
+                $0.runtime = runtime
+                $0.runID = nil
+                $0.mood = $0.isPaused ? .paused : .idle
+                $0.status = "Settings saved; send a message to start"
+            }
+            if let changed = self.bot(id) { writeHome(changed) }
+            save()
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Release background pollers without interrupting guest sessions.
+    public func disconnect() {
+        for poller in pollers.values { poller.cancel() }
+        pollers.removeAll()
+    }
 
     public func updateAvatar(_ id: String, _ avatar: AvatarConfig) {
         update(id) { $0.avatar = avatar }
@@ -186,6 +237,10 @@ public final class BotStore: ObservableObject {
 
     private func deliver(_ id: String, _ text: String) async {
         guard let engine, let bot = bot(id) else { return }
+        guard !changing.contains(id) else {
+            lastError = "Wait for the bot's settings or startup operation to finish."
+            return
+        }
         do {
             if bot.runID == nil {
                 await bringUp(id, firstPrompt: text)
@@ -253,7 +308,7 @@ public final class BotStore: ObservableObject {
     // MARK: - Pause, resume, reset
 
     public func pause(_ id: String) async {
-        guard let bot = bot(id), !bot.isPaused else { return }
+        guard let bot = bot(id), !bot.isPaused, !changing.contains(id) else { return }
         update(id) { $0.isPaused = true; $0.mood = .paused; $0.status = "Paused" }
         pollers[id]?.cancel()
         pollers[id] = nil
@@ -268,7 +323,7 @@ public final class BotStore: ObservableObject {
     }
 
     public func resume(_ id: String) async {
-        guard let bot = bot(id), bot.isPaused else { return }
+        guard let bot = bot(id), bot.isPaused, !changing.contains(id) else { return }
         do { try await engine?.resume(bot) } catch { lastError = error.localizedDescription }
         update(id) { $0.isPaused = false; $0.mood = .idle; $0.status = "Ready" }
         setTasks(id) { list in
@@ -280,7 +335,7 @@ public final class BotStore: ObservableObject {
 
     /// Delete the bot: its run, Space, conversation, memory and schedule.
     public func reset(_ id: String) async {
-        guard let bot = bot(id) else { return }
+        guard let bot = bot(id), !changing.contains(id) else { return }
         pollers[id]?.cancel()
         pollers[id] = nil
         do { try await engine?.reset(bot) } catch { lastError = error.localizedDescription }
@@ -320,7 +375,7 @@ public final class BotStore: ObservableObject {
     /// Run a scheduled task now: the routine clock calls this. A paused or
     /// busy bot refuses rather than interrupts.
     public func fire(taskID: String, botID: String, now: Date = Date()) async -> Bool {
-        guard let bot = bot(botID), !bot.isPaused, !busy.contains(botID),
+        guard let bot = bot(botID), !bot.isPaused, !isBusy(botID),
               let task = tasks(for: botID).first(where: { $0.id == taskID }) else { return false }
         setTasks(botID) { list in
             if let i = list.firstIndex(where: { $0.id == taskID }) {
@@ -367,6 +422,7 @@ public final class BotStore: ObservableObject {
         guard let engine, let bot = bot(id), bot.runID != nil else { return true }
         do {
             let (updates, cursor) = try await engine.poll(bot, cursor: cursors[id] ?? 0)
+            guard self.bot(id)?.runID == bot.runID, !changing.contains(id) else { return true }
             cursors[id] = cursor
             for u in updates { handle(id, u) }
         } catch {

@@ -96,11 +96,48 @@ public final class CuaEngine: BotEngine {
     public func start(_ bot: Bot, volume: VolumeStore, prompt: String) async throws -> String {
         let space = try await space(bot)
         let home = try await home(bot, space)
-        try await hydrate(bot, volume: volume, space: space, home: home)
+        let launch = try HarnessLaunch(bot: bot, home: home, endpointModel: endpoint?.model,
+                                       customEndpoint: endpoint != nil)
+        try await hydrate(bot, volume: volume, space: space, home: launch.cwd)
+        let q = HarnessLaunch.quote
+        let directories = [launch.cwd, "\(launch.cwd)/.pi", "\(launch.cwd)/outputs",
+                           "\(launch.cwd)/inbox", "\(launch.cwd)/memory"]
+            + (launch.environment["PI_CODING_AGENT_DIR"].map { [$0] } ?? [])
+        let created = try await space.bash(command: "mkdir -p " + directories.map(q).joined(separator: " "), timeoutMs: 10_000)
+        guard created.exitCode == 0 else { throw EngineError.refused("Could not create the bot working directory") }
+        for (path, content) in launch.files {
+            var data = content
+            if path.hasSuffix("/APPEND_SYSTEM.md") {
+                let existing = try await space.bash(
+                    command: "if [ -e \(q(path)) ]; then head -c 1048577 \(q(path)); fi", timeoutMs: 10_000)
+                guard existing.exitCode == 0 else { throw EngineError.refused("Cannot read the project system prompt") }
+                let managed = existing.stdout.hasPrefix(HarnessLaunch.promptHeader)
+                if content.isEmpty {
+                    if managed {
+                        let removed = try await space.bash(command: "rm -- \(q(path))", timeoutMs: 10_000)
+                        guard removed.exitCode == 0 else { throw EngineError.refused("Cannot clear the previous system prompt") }
+                    }
+                    continue
+                }
+                guard existing.stdout.isEmpty || managed else {
+                    throw EngineError.refused("The project already has an unmanaged APPEND_SYSTEM.md; use a dedicated bot workspace")
+                }
+            }
+            if path.hasSuffix("/settings.json") {
+                let existing = try await space.bash(
+                    command: "if [ -e \(q(path)) ]; then head -c 1048577 \(q(path)); else printf '{}'; fi", timeoutMs: 10_000)
+                guard existing.exitCode == 0, existing.stdout.utf8.count <= 1_048_576 else {
+                    throw EngineError.refused("Cannot read existing Pi project settings")
+                }
+                data = try HarnessLaunch.mergeSettings(existing: Data(existing.stdout.utf8), managed: content)
+            }
+            _ = try await space.write(path: path, content: data)
+        }
         // #region docs:sw-agent-start
         let options = SpaceAgentOptions(
             envFromHost: endpoint?.keyVariables ?? Self.defaultKeyVariables(bot.harness),
-            repo: nil, branch: nil, cwd: home, model: endpoint?.model, baseUrl: endpoint?.baseURL,
+            env: launch.environment,
+            repo: nil, branch: nil, cwd: launch.cwd, model: launch.model, baseUrl: endpoint?.baseURL,
             exitWhenIdle: false)
         let report = try await space.agentStart(agent: bot.harness.rawValue, prompt: prompt, show: false,
                                                 options: options)
@@ -109,10 +146,13 @@ public final class CuaEngine: BotEngine {
     }
 
     static func defaultKeyVariables(_ harness: Harness) -> [String] {
-        switch harness {
+        if let keys = HarnessDescriptor.catalog(json: agentHarnesses()).first(where: { $0.id == harness.id })?.keys {
+            return keys
+        }
+        return switch harness {
         case .claudeCode: ["ANTHROPIC_API_KEY"]
         case .codex: ["OPENAI_API_KEY"]
-        case .hermes, .openclaw: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"]
+        default: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY"]
         }
     }
 
@@ -158,6 +198,13 @@ public final class CuaEngine: BotEngine {
         return (updates, next)
     }
 
+    public func stop(_ bot: Bot) async throws {
+        guard let run = bot.runID else { return }
+        let report = try await space(bot).agentStop(runId: run)
+        guard report.ok else { throw EngineError.refused(report.reason) }
+        turnText[bot.id] = nil
+    }
+
     public func interrupt(_ bot: Bot) async throws {
         guard let run = bot.runID else { return }
         _ = try await space(bot).agentInterrupt(runId: run)
@@ -174,18 +221,19 @@ public final class CuaEngine: BotEngine {
             if rel.hasPrefix("identity/") { continue }  // the app's records, not the bot's
             _ = try await space.write(path: "\(home)/\(rel)", content: data)
         }
-        _ = try await space.bash(command: "mkdir -p '\(home)/outputs' '\(home)/inbox' '\(home)/memory'", timeoutMs: 10_000)
+        _ = try await space.bash(command: "mkdir -p " + ["\(home)/outputs", "\(home)/inbox", "\(home)/memory"].map(HarnessLaunch.quote).joined(separator: " "), timeoutMs: 10_000)
     }
 
     public func push(_ bot: Bot, volume: VolumeStore) async throws {
         let space = try await space(bot)
         let home = try await home(bot, space)
         let prefix = VolumeLayout.home(bot.id)
+        let cwd = bot.runtime?.workingDirectory.isEmpty == false ? bot.runtime!.workingDirectory : home
         var paths = [VolumeLayout.instructions(bot.id, harness: bot.harness), VolumeLayout.rules(bot.id)]
         paths += try volume.walk(VolumeLayout.inbox(bot.id)).map(\.path)
         for path in paths {
             guard let data = try volume.read(path) else { continue }
-            _ = try await space.write(path: "\(home)/\(path.dropFirst(prefix.count))", content: data)
+            _ = try await space.write(path: "\(cwd)/\(path.dropFirst(prefix.count))", content: data)
         }
     }
 
@@ -193,8 +241,9 @@ public final class CuaEngine: BotEngine {
     public func checkpoint(_ bot: Bot, volume: VolumeStore) async throws {
         let space = try await space(bot)
         let home = try await home(bot, space)
+        let cwd = bot.runtime?.workingDirectory.isEmpty == false ? bot.runtime!.workingDirectory : home
         let list = try await space.bash(
-            command: "cd '\(home)' 2>/dev/null && find memory outputs -type f -size -8M 2>/dev/null | head -200",
+            command: "cd \(HarnessLaunch.quote(cwd)) 2>/dev/null && find memory outputs -type f -size -8M 2>/dev/null | head -200",
             timeoutMs: 15_000)
         let staging = FileManager.default.temporaryDirectory
             .appendingPathComponent("cua-bots-\(bot.id)-\(UUID().uuidString)")
@@ -202,7 +251,7 @@ public final class CuaEngine: BotEngine {
         for rel in list.stdout.split(separator: "\n").map(String.init) where !rel.isEmpty {
             let dir = staging.appendingPathComponent((rel as NSString).deletingLastPathComponent)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            _ = try await space.download(remotePath: "\(home)/\(rel)", destDir: dir.path)
+            _ = try await space.download(remotePath: "\(cwd)/\(rel)", destDir: dir.path)
             let local = dir.appendingPathComponent((rel as NSString).lastPathComponent)
             if let data = try? Data(contentsOf: local) {
                 // The Volume refuses secrets under agents/; a refused file stays

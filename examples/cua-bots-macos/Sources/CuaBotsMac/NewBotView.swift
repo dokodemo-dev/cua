@@ -90,16 +90,7 @@ struct NewBotView: View {
                 ForEach(Placement.allCases) { p in Text(p.name).tag(p) }
             }
             .pickerStyle(.segmented)
-            Picker("Agent", selection: $model.draft.harness) {
-                ForEach(Harness.allCases) { h in
-                    VStack(alignment: .leading) {
-                        Text(h.name)
-                        Text(h.blurb).font(.caption).foregroundStyle(.secondary)
-                    }
-                    .tag(h)
-                }
-            }
-            .pickerStyle(.radioGroup)
+            HarnessSettings(harness: $model.draft.harness, runtime: $model.draft.runtime)
             LabeledContent("Memory") {
                 Text("Volume home · agents/\(Bot.agentName(for: displayName))").foregroundStyle(.secondary)
             }
@@ -108,8 +99,7 @@ struct NewBotView: View {
             }
         }
         .formStyle(.grouped)
-        .scrollDisabled(true)
-        .frame(height: 300)
+        .frame(height: 380)
     }
 
     var stepDots: some View {

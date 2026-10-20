@@ -53,6 +53,9 @@ public protocol BotEngine: AnyObject {
     func pause(_ bot: Bot) async throws
     func resume(_ bot: Bot) async throws
 
+    /// Stop only the run, preserving its Space, memory and outputs.
+    func stop(_ bot: Bot) async throws
+
     /// Delete the run and the Space.
     func reset(_ bot: Bot) async throws
 }

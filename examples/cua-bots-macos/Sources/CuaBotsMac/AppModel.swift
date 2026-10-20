@@ -16,7 +16,8 @@ struct BotDraft {
     var step = 0
     var name = ""
     var avatar = AvatarConfig(color: .sky, eyes: .star, ears: .scalloped)
-    var harness: Harness = .hermes
+    var harness: Harness = .pi
+    var runtime = BotRuntime()
     var placement: Placement = .local
     var customizedLook = false
 }
@@ -35,6 +36,7 @@ enum Route: Hashable {
 @MainActor
 final class AppModel: ObservableObject, Notifier {
     let store: BotStore
+    let harnesses = HarnessDescriptor.catalog(json: agentHarnesses())
     let engine: CuaEngine?
     let clock: RoutineClock
     let keyvault: KeyvaultBridge
@@ -153,9 +155,9 @@ final class AppModel: ObservableObject, Notifier {
 
     // MARK: - Actions
 
-    func createBot(name: String, avatar: AvatarConfig, harness: Harness, placement: Placement) {
+    func createBot(name: String, avatar: AvatarConfig, harness: Harness, placement: Placement, runtime: BotRuntime? = nil) {
         Task {
-            let bot = await store.createBot(name: name, avatar: avatar, harness: harness, placement: placement)
+            let bot = await store.createBot(name: name, avatar: avatar, harness: harness, placement: placement, runtime: runtime)
             route = .bot(bot.id)
         }
         route = .bot(Bot.agentName(for: name))
@@ -165,7 +167,7 @@ final class AppModel: ObservableObject, Notifier {
         let d = draft
         draft = BotDraft()
         createBot(name: d.name.trimmingCharacters(in: .whitespaces), avatar: d.avatar, harness: d.harness,
-                  placement: d.placement)
+                  placement: d.placement, runtime: d.runtime)
     }
 
     func send(_ text: String) {
@@ -187,7 +189,9 @@ final class AppModel: ObservableObject, Notifier {
 
     func reset(_ bot: Bot) {
         Task {
-            streams[bot.id].map { s in Task { await s.stop() } }
+            if let stream = streams[bot.id] {
+                Task { await stream.stop() }
+            }
             streams[bot.id] = nil
             await store.reset(bot.id)
             route = store.bots.first.map { .bot($0.id) } ?? .newBot

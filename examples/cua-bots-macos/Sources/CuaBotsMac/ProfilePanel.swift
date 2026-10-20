@@ -11,6 +11,7 @@ struct ProfilePanel: View {
     @EnvironmentObject var model: AppModel
     var bot: Bot
     @State private var showAllActivity = false
+    @State private var editingHarness = false
     @State private var thumbnail: NSImage?
 
     var tasks: [BotTask] { model.store.tasks(for: bot.id) }
@@ -27,6 +28,7 @@ struct ProfilePanel: View {
             }
             .padding(16)
         }
+        .sheet(isPresented: $editingHarness) { HarnessSettingsSheet(bot: bot) }
         .task(id: bot.spaceID) {
             // A fresh look at its screen every half minute while visible.
             while !Task.isCancelled {
@@ -228,6 +230,8 @@ struct ProfilePanel: View {
 
     var customize: some View {
         section("Customize") {
+            navRow("cpu", "Agent settings", bot.harness.name) { editingHarness = true }
+            Divider()
             navRow("brain", "Memory", "agents/\(bot.id)/memory") { model.showingMemory = true }
             Divider()
             navRow("checklist", "Custom rules", "\(model.store.rules(for: bot.id).count) rules") { model.showingRules = true }

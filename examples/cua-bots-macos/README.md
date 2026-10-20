@@ -27,6 +27,20 @@ swift build && .build/debug/CuaBots
 `stage-library.sh` stages the Cua Spaces app export, which carries the MIT
 cua SDK too, where the Swift packages link it.
 
+New bots default to **Pi**. The agent picker reads the SDK harness catalog,
+including the existing Claude Code and Codex options. Bot-specific model and
+Pi settings are available during creation and under **Profile → Agent
+settings**. Saving changed settings stops only the old agent run; the next
+message starts a new session on the same Space. Existing bot harness IDs
+are preserved.
+
+Pi configuration paths refer to directories **inside the guest**, not this
+Mac. No local Pi profile or credentials are copied. Provision reviewed skills,
+extensions and models in the guest profile before using them. For setup,
+compatibility limits and the remaining verification work, see
+[`docs/custom-bots/harnesses.md`](../../docs/custom-bots/harnesses.md) and
+[`test-results.md`](../../docs/custom-bots/test-results.md).
+
 A bot's agent needs a model key in the app's environment
 (`ANTHROPIC_API_KEY` for Claude Code, `OPENAI_API_KEY` for Codex; Hermes and
 OpenClaw take either). `CUA_BOTS_MODEL_URL`, `CUA_BOTS_MODEL` and
@@ -78,8 +92,16 @@ permissions auto-approved inside the bot's own Space. See the gaps below.
 ## Tests and screenshots
 
 ```sh
-scripts/test.sh                                    # unit tests (swift-testing)
+scripts/test.sh                                    # all tests (requires staged native SDK)
+scripts/test.sh --core-only                        # isolated Core/UI tests, no SDK or VM
 scripts/capture.sh <out-dir> [<scratch-home>] [--phone]
+```
+
+The live CuaEngine suite is opt-in and requires OrbStack or Docker. Run it with a non-production `OPENAI_API_KEY` value beginning with `test-`; the test passes that value only to a disposable Space whose model endpoint is its own loopback mock. It does not call a real model or copy local Pi settings. The first run may download the SDK-pinned Pi packages. Telemetry must stay disabled:
+
+```sh
+CUA_BOTS_RUN_CUA_INTEGRATION=1 CUA_TELEMETRY=0 CUA_TELEMETRY_FORBID_NETWORK=1 \
+  scripts/test.sh --filter CuaEngineIntegrationTests
 ```
 
 `capture.sh` runs the app in a throwaway `HOME` with the file credential

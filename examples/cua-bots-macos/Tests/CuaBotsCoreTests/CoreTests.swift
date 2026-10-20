@@ -158,6 +158,9 @@ final class ScriptedEngine: BotEngine {
     var replies: [String] = []
     var paused = false
     var resetCount = 0
+    var starts: [Bot] = []
+    var stopped: [String] = []
+    var refuseStop = false
     private var queue: [EngineUpdate] = []
     private var turn: UInt32 = 0
     private var seq: UInt64 = 0
@@ -169,8 +172,9 @@ final class ScriptedEngine: BotEngine {
     }
 
     func start(_ bot: Bot, volume: VolumeStore, prompt: String) async throws -> String {
+        starts.append(bot)
         try await send(bot, text: prompt)
-        return "run-1"
+        return "run-\(starts.count)"
     }
 
     func send(_ bot: Bot, text: String) async throws {
@@ -194,6 +198,10 @@ final class ScriptedEngine: BotEngine {
     func interrupt(_ bot: Bot) async throws {}
     func pause(_ bot: Bot) async throws { paused = true }
     func resume(_ bot: Bot) async throws { paused = false }
+    func stop(_ bot: Bot) async throws {
+        if refuseStop { throw CocoaError(.userCancelled) }
+        stopped.append(bot.runID ?? "")
+    }
     func reset(_ bot: Bot) async throws { resetCount += 1 }
 }
 

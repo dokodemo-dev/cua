@@ -54,6 +54,15 @@ let package = Package(
         ),
         .testTarget(name: "CuaBotsCoreTests", dependencies: ["CuaBotsCore", "CuaBotsUI"],
                     path: "Tests/CuaBotsCoreTests"),
+        .testTarget(
+            name: "CuaBotsCuaIntegrationTests",
+            dependencies: [
+                "CuaBotsCore",
+                "CuaBotsCua",
+                .product(name: "Cua", package: "Cua"),
+            ],
+            path: "Tests/CuaBotsCuaIntegrationTests"
+        ),
     ],
     swiftLanguageModes: [.v5]
 )
