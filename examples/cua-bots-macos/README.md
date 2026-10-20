@@ -104,6 +104,15 @@ CUA_BOTS_RUN_CUA_INTEGRATION=1 CUA_TELEMETRY=0 CUA_TELEMETRY_FORBID_NETWORK=1 \
   scripts/test.sh --filter CuaEngineIntegrationTests
 ```
 
+For an interactive Pi GUI round trip without a real model, use
+[`scripts/launch-mock.sh`](scripts/launch-mock.md). It creates a disposable
+local Space with a loopback mock, prints the exact bot name to create in
+the GUI, and removes that Space when the GUI exits. It uses the synthetic
+`test-key` only; no Mac Pi settings or real API credentials are inherited.
+For UI-only inspection without preparing a mock, use
+[`scripts/launch-isolated.sh`](scripts/launch-isolated.md). Neither launcher
+is an OS sandbox; macOS window preferences can still use the real account.
+
 `capture.sh` runs the app in a throwaway `HOME` with the file credential
 store, against a real local Space, with the scripted mock provider
 (`cua-mock-llm`, `scripts/demo-model.json`) behind the real harness. It

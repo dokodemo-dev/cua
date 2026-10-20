@@ -4,8 +4,10 @@
 
 macOS arm64、Swift 6.3.3、XcodeのDeveloper環境で検証した。
 実APIキー、OAuth、実モデル、Cua Cloud、VPN、Keyvaultは使っていない。
-OrbStack上に隔離Spaceを作り、Cua CLIとCuaEngineのテストで承認済みの `test-key` placeholderだけを使った。応答はSpace内loopbackのOpenAI Chatモックが返した。
-Cua CLIとオプトインのCuaEngine試験では `CUA_TELEMETRY=0` と `CUA_TELEMETRY_FORBID_NETWORK=1` を指定し、Usage Telemetryの無効化を公式CLIで確認した。通常のSwiftテストでは実行フラグがなく、Cua Engineは起動しない。
+OrbStack上に隔離Spaceを作り、Cua CLI、CuaEngine、GUIのテストで承認済みの `test-key` placeholderだけを使った。
+応答はSpace内loopbackのOpenAI Chatモックが返した。
+Cua CLI、オプトインのCuaEngine試験、GUI試験では `CUA_TELEMETRY=0` と `CUA_TELEMETRY_FORBID_NETWORK=1` を指定し、Usage Telemetryの無効化を公式CLIで確認した。
+通常のSwiftテストでは実行フラグがなく、Cua Engineは起動しない。
 Cargo.lock依存、検疫条件を満たしたprotobuf、Cua Linux imageとSDK固定ハーネス依存を取得した。MacのPi設定や認証ファイルはコピーしていない。
 
 ## 実行結果
@@ -30,7 +32,8 @@ Cargo.lock依存、検疫条件を満たしたprotobuf、Cua Linux imageとSDK�
 | Cua Usage Telemetry | `CUA_TELEMETRY=0` が有効で、`CUA_TELEMETRY_FORBID_NETWORK=1` も指定 |
 | `scripts/test.sh`（通常経路） | 成功。30テスト、11スイート（29成功、オプトイン1件skip）。CuaBots実行ファイルのリンクも成功 |
 | オプトインの`CuaBotsCuaIntegrationTests` | 成功。CuaEngine経由でPiを起動し、suspend/resume後の同一Runで2回目のモック応答を確認。SDKの更新通知が応答に付くため、応答本文の完全一致ではなくモック文の存在を検証 |
-| Cua BotsのGUI起動 | 未実施。CuaEngineを直接呼ぶ統合テストは通過したが、アプリUIからの操作は未確認 |
+| Cua BotsのGUI起動と送受信 | 成功。一時HOMEで起動し、Cua DriverのAX操作でBot作成、`hello`、`again`の送信を実施。画面上のモック応答`#1`から`#3`と、モック受信3件を確認 |
+| GUIモック起動スクリプト | 成功。Nodeの2単体テスト、strict型検査、Oxlint、シェル構文検査を通過。初回のsandboxのみの作成では認証エラーになったため、`spaces create`で登録する方式に修正 |
 | `swift build --target CuaBots` | 成功。SDKアダプターとMac UIを含めてコンパイル |
 | 新規scratch領域での同ターゲットビルド | 成功。既存ビルドキャッシュなしでコンパイル |
 | `xcrun swift-format lint`（新規Swiftファイル） | 成功 |
@@ -40,7 +43,9 @@ Cargo.lock依存、検疫条件を満たしたprotobuf、Cua Linux imageとSDK�
 | `git diff --check` | 成功 |
 
 通常のSwiftテストでは29件が成功し、オプトインのSpace統合テスト1件は実行フラグ未設定でskipした。CuaBots実行ファイルもリンクした。
-オプトインテストでは、CuaEngineがSpaceを作り、Piの2回目の応答まで同じRunで処理する経路を確認した。GUI操作とアプリ再起動後の復帰は未確認である。
+オプトインテストでは、CuaEngineがSpaceを作り、Piの2回目の応答まで同じRunで処理する経路を確認した。
+追加のGUI試験では、アプリUIからPiを起動し、初回応答と2回の追加送信を確認した。
+アプリ再起動後のRun復帰は未確認である。
 
 既存のKeyvault参照は現行SDKのdomain、appDisplay、kindへ修正した。
 これによりMac UI全体のコンパイルを確認できたが、保存済みsign-inの動作自体は未検証である。
@@ -88,12 +93,21 @@ SDKをstubへ差し替えて本番アプリを起動する仕組みではない�
 Cargo.lock依存の取得、protobufの導入、隔離Space上でのSDK固定ハーネス導入はユーザーの許可を得て実施した。
 CuaのPi adapterはOpenAI Chat Completions形式を使う。Anthropic wire形式のendpointは拒否される。
 
+GUI送受信の再実行には、`examples/cua-bots-macos/scripts/launch-mock.sh`を使う。
+手順と終了時の後始末は、同じディレクトリの`launch-mock.md`に記載した。
+GUI試験の初回失敗分はアプリ終了後にSpaceを削除した。
+成功分はユーザーが引き続き操作できるようGUIを開いたままとし、そのGUIの終了時にSpaceを削除する。
+一時HOMEとイメージキャッシュは残す。
+
 ## 未確認と未実装
 
 Phase 1は受け入れ条件の一部が未達である。
 SDKを使うCua CLI経由のPi起動、送受信、同一Runへのfollow-up、Space suspend/resume後の再送信は確認した。
-一方、Cua Botsアプリ本体からの実起動とアプリ再起動後のRun復帰、実Extensionのツール実行、Codexの実起動は未確認である。
+Cua Botsアプリ本体からのPi起動とモック送受信も確認した。
+アプリ再起動後のRun復帰、実Extensionのツール実行、Codexの実起動は未確認である。
 Pi用Cua Driverブリッジも追加していない。
+SDKの`reuse`は名前ではなく配置先と利用可能なサービスでSpaceを選ぶため、複数BotのSpace分離も追加対応が必要となる。
+今回のGUI試験は一時HOME内に1つのSpaceだけを登録して行った。
 
 Phase 2以降のVM選択、WireGuard接続管理、Bot単位認可、協調API、グループチャット、成果物転送、UI外の常駐スケジューラーは未実装である。
 そのためVMや共有Spaceを選べる状態としては報告しない。
@@ -104,3 +118,7 @@ SDKのAPIとサンプルが同じFork内でも一致していなかった。
 今後も型の正本を現行バインディングに置き、ネイティブリンク、ソースのコンパイル、純粋なCoreテスト、実アプリ検証を別々に記録する。
 この区別を維持するため、Core-onlyテスト経路と関連文書をリポジトリへ残した。
 共有Spaceへの単純なID割り当てはreset時の誤削除につながるため、所有権モデルを先に実装する方針とした。
+
+GUIの事前準備はsandboxだけでなく、SDKのSpaceレジストリにも登録する必要がある。
+`sb create`の後にGUIで同名Spaceを作ると、再利用ではなく新規作成へ進み、既存sandboxの接続情報と食い違った。
+モック用ランチャーは`spaces create`と`spaces delete`を対にして、この手順を残した。
