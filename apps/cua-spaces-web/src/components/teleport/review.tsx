@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 
 import type { ReviewView, TeleportSession, TeleportStore } from "@/bridge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { SavedItems } from "./saved-items";
 
@@ -30,6 +31,8 @@ export function TeleportReview({
   vault: TeleportSession["vault"];
   teleport: TeleportStore;
 }) {
+  // `t` is a toggle in the "Also sent" list, so the translator is `tr`.
+  const { t: tr } = useI18n();
   const installs = r.items.filter((i) => i.kind === "install");
   const fromVault = r.source === "vault";
   return (
@@ -37,26 +40,26 @@ export function TeleportReview({
       {r.offersVault ? <Source review={r} teleport={teleport} /> : null}
 
       {fromVault ? (
-        <Group title="Saved in the Keyvault">
+        <Group title={tr("Saved in the Keyvault")}>
           {vault ? <SavedItems view={vault.view} query={vault.query} teleport={teleport} /> : <Reading />}
         </Group>
       ) : null}
 
       {!fromVault && r.offersDomains ? (
-        <Group title="Sites" aside={r.domains.length || r.domainQuery ? r.domainSummary : null}>
+        <Group title={tr("Sites")} aside={r.domains.length || r.domainQuery ? r.domainSummary : null}>
           <Sites review={r} reading={readingSites || r.needsDomains} teleport={teleport} />
         </Group>
       ) : null}
 
       {!fromVault && r.toggles.length ? (
-        <Group title="Also sent">
+        <Group title={tr("Also sent")}>
           <ul className="divide-y">
             {r.toggles.map((t) => (
               <li key={t.key} data-review-item={t.key} data-kind={t.sensitive ? "secret" : "state"} data-sent={t.selected || undefined}>
                 <label className="flex cursor-default items-start gap-3 px-4 py-2.5">
                   <Checkbox
                     className="mt-0.5"
-                    aria-label={`Send ${t.label}`}
+                    aria-label={tr("Send {name}", { name: t.label })}
                     checked={t.selected}
                     onCheckedChange={() => teleport.send({ type: "toggle-item", key: t.key })}
                   />
@@ -101,7 +104,7 @@ export function TeleportReview({
       ) : null}
 
       {r.steps.length ? (
-        <Group title="What happens">
+        <Group title={tr("What happens")}>
           <ul className="divide-y">
             {r.steps.map((s, i) => (
               <li key={i} className="px-4 py-2.5 text-[13px]" data-review-step={s.kind}>
@@ -162,13 +165,14 @@ export function TeleportReview({
 
 /** Live app or saved items (`flow.review`'s labels and note). */
 function Source({ review: r, teleport }: { review: ReviewView; teleport: TeleportStore }) {
+  const { t } = useI18n();
   const options = [
     { value: "live", label: r.liveLabel },
     { value: "vault", label: r.vaultLabel },
   ] as const;
   return (
     <Group>
-      <RadioGroup value={r.source} onValueChange={(v) => void teleport.sendFrom(v as "live" | "vault")} className="divide-y" aria-label="Send from" data-review-source>
+      <RadioGroup value={r.source} onValueChange={(v) => void teleport.sendFrom(v as "live" | "vault")} className="divide-y" aria-label={t("Send from")} data-review-source>
         {options.map((o) => (
           <label key={o.value} className="flex cursor-default items-center gap-3 px-4 py-2.5 text-[13px]" data-source={o.value}>
             <Radio.Root
@@ -232,14 +236,15 @@ function Gate({ data, checked, onChange, note, children }: { data: string; check
  * holds (reading the app), or each saved password's site and username (from
  * the Keyvault). Never a value. */
 function Passwords({ review: r, teleport }: { review: ReviewView; teleport: TeleportStore }) {
+  const { t } = useI18n();
   const rows = r.passwords ?? [];
   return (
     <div className="border-t">
       <div className="flex items-center gap-2 border-b px-4 py-1.5">
         <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
         <input
-          aria-label="Search saved passwords"
-          placeholder="Search saved passwords"
+          aria-label={t("Search saved passwords")}
+          placeholder={t("Search saved passwords")}
           value={r.passwordQuery ?? ""}
           onChange={(e) => teleport.send({ type: "password-query", text: e.target.value })}
           className="h-7 min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
@@ -279,23 +284,28 @@ function Passwords({ review: r, teleport }: { review: ReviewView; teleport: Tele
 
 /** The browser's sites, with counts and a search. */
 function Sites({ review: r, reading, teleport }: { review: ReviewView; reading: boolean; teleport: TeleportStore }) {
+  const { t } = useI18n();
   if (reading) {
     return (
       <p className="flex items-center gap-2 px-4 py-3 text-[13px] text-muted-foreground">
-        <LoaderCircleIcon className="size-3.5 animate-spin" /> Reading the sites…
+        <LoaderCircleIcon className="size-3.5 animate-spin" /> {t("Reading the sites…")}
       </p>
     );
   }
   if (!r.domains.length && !r.domainQuery) {
-    return <p className="px-4 py-3 text-[13px] text-muted-foreground">No sites to choose. The cookies listed under Also sent are sent as they are.</p>;
+    return (
+      <p className="px-4 py-3 text-[13px] text-muted-foreground">
+        {t("No sites to choose. The cookies listed under Also sent are sent as they are.")}
+      </p>
+    );
   }
   return (
     <>
       <div className="flex items-center gap-2 border-b px-4 py-1.5">
         <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
         <input
-          aria-label="Search sites"
-          placeholder="Search sites"
+          aria-label={t("Search sites")}
+          placeholder={t("Search sites")}
           value={r.domainQuery}
           onChange={(e) => teleport.send({ type: "domain-query", text: e.target.value })}
           className="h-7 min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
@@ -322,11 +332,11 @@ function Sites({ review: r, reading, teleport }: { review: ReviewView; reading: 
               <span className="truncate text-xs text-muted-foreground">{d.counts}</span>
               <span className="flex-1" />
               {d.identityProvider ? (
-                <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400" title="Its session signs in to other apps. Send it only if you mean to.">
-                  Identity provider
+                <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400" title={t("Its session signs in to other apps. Send it only if you mean to.")}>
+                  {t("Identity provider")}
                 </span>
               ) : d.signin ? (
-                <span className="shrink-0 text-xs text-muted-foreground">Signs you in</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{t("Signs you in")}</span>
               ) : null}
             </label>
             {d.unavailable > 0 ? <p className="-mt-1 pr-4 pb-2 pl-[66px] text-xs text-muted-foreground/70">{d.unavailableNote}</p> : null}

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { KIND_ICON } from "@/components/teleport/saved-items";
 import { vaultLines, type VaultLine } from "@/lib/keyvault";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 interface LockActions {
@@ -46,13 +47,14 @@ export function VaultList({
   onShowItems: () => void;
   onDelete: (ids: string[]) => void;
 }) {
+  const { t } = useI18n();
   const lines = vaultLines(view);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="mx-auto w-full max-w-3xl px-8">
         <div className="relative mb-3">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(e) => send({ type: "query", text: e.target.value })} placeholder={view.searchPrompt} aria-label="Search Keyvault" className="pl-8" />
+          <Input value={query} onChange={(e) => send({ type: "query", text: e.target.value })} placeholder={view.searchPrompt} aria-label={t("Search Keyvault")} className="pl-8" />
         </div>
         {view.namesHidden ? (
           <div className="mb-3 flex items-center gap-3 rounded-xl border bg-brand-surface/60 px-4 py-2.5" data-vault-hidden>
@@ -64,10 +66,17 @@ export function VaultList({
           </div>
         ) : null}
         <div className="flex h-8 items-center justify-between px-1 text-xs text-muted-foreground">
-          <span data-vault-summary>{view.selection.count > 0 ? view.selection.title : `${view.total} items in ${view.apps.length} apps`}</span>
+          <span data-vault-summary>
+            {view.selection.count > 0
+              ? view.selection.title
+              : t("{items} items in {apps} apps", {
+                  items: String(view.total),
+                  apps: String(view.apps.length),
+                })}
+          </span>
           {view.canSelectAll ? (
             <button type="button" className="text-brand hover:underline" onClick={() => send({ type: view.selection.count === view.shown ? "clear" : "select-all" })}>
-              {view.selection.count === view.shown ? "Select None" : "Select All"}
+              {view.selection.count === view.shown ? t("Select None") : t("Select All")}
             </button>
           ) : null}
         </div>
@@ -202,6 +211,7 @@ function GroupRow({
   actions: LockActions;
   blocked: boolean;
 }) {
+  const { t } = useI18n();
   const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
   return (
     <div
@@ -212,7 +222,12 @@ function GroupRow({
       className={cn("flex h-10 items-center gap-2.5 rounded-lg px-3 hover:bg-foreground/[0.04]", indent === 1 && "ml-6")}
     >
       <span onClick={(e) => e.stopPropagation()}>
-        <Checkbox aria-label={`Select ${label}`} checked={triChecked(selected)} indeterminate={selected === "mixed"} onCheckedChange={onSelect} />
+        <Checkbox
+          aria-label={t("Select {name}", { name: label })}
+          checked={triChecked(selected)}
+          indeterminate={selected === "mixed"}
+          onCheckedChange={onSelect}
+        />
       </span>
       <Chevron className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       {icon}
@@ -226,6 +241,7 @@ function GroupRow({
 }
 
 function ItemRow({ row, indent, send, actions, blocked }: { row: VaultRow; indent: number; send: (a: VaultAction) => void; actions: LockActions; blocked: boolean }) {
+  const { t } = useI18n();
   const Icon = KIND_ICON[row.kind] ?? FileIcon;
   const toggle = () => send({ type: "toggle", id: row.id });
   return (
@@ -238,7 +254,11 @@ function ItemRow({ row, indent, send, actions, blocked }: { row: VaultRow; inden
       style={{ marginLeft: `${(indent - 1) * 1.5}rem` }}
     >
       <span onClick={(e) => e.stopPropagation()}>
-        <Checkbox aria-label={`Select ${row.title}`} checked={row.selected} onCheckedChange={toggle} />
+        <Checkbox
+          aria-label={t("Select {name}", { name: row.title })}
+          checked={row.selected}
+          onCheckedChange={toggle}
+        />
       </span>
       <Icon className="size-4 shrink-0 text-muted-foreground" aria-label={row.kindLabel} />
       <div className="min-w-0 flex-1">
@@ -263,15 +283,22 @@ function ItemRow({ row, indent, send, actions, blocked }: { row: VaultRow; inden
  * access is allowed. A click flips it for what it stands for (an item, a
  * site, an app); unlocking asks first, then Touch ID once. */
 function LockButton({ state, name, unlockIds, lockIds, help, actions, blocked }: LockSpec & { help?: string; actions: LockActions; blocked: boolean }) {
+  const { t } = useI18n();
   const Icon = state === "locked" ? LockIcon : LockOpenIcon;
   const text =
     help ||
-    (state === "unlocked" ? "Unlocked. Click to lock." : state === "mixed" ? "Some unlocked. Click to unlock the rest." : "Locked. Click to allow unattended access.");
+    (state === "unlocked"
+      ? t("Unlocked. Click to lock.")
+      : state === "mixed"
+        ? t("Some unlocked. Click to unlock the rest.")
+        : t("Locked. Click to allow unattended access."));
   return (
     <button
       type="button"
       data-lock={state}
-      aria-label={state === "unlocked" ? `Lock ${name}` : `Unlock ${name}`}
+      aria-label={
+        state === "unlocked" ? t("Lock {name}", { name }) : t("Unlock {name}", { name })
+      }
       title={text}
       disabled={blocked || (state === "locked" && unlockIds.length === 0)}
       onClick={(e) => {
@@ -306,27 +333,32 @@ function BatchBar({
   actions: LockActions;
   onDelete: (ids: string[]) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex shrink-0 items-center gap-2 border-t bg-muted/60 px-8 py-2.5" data-vault-batch>
       <span className="text-[13px] font-medium">{selection.title}</span>
       <Button size="sm" variant="ghost" onClick={() => send({ type: "clear" })}>
-        Clear
+        {t("Clear")}
       </Button>
       <span className="flex-1" />
       <Button size="sm" variant="outline" disabled={!selection.canLock || busy} onClick={() => actions.lock(selection.lockIds)}>
-        <LockIcon /> Lock
+        <LockIcon /> {t("Lock")}
       </Button>
       <Button
         size="sm"
         variant="outline"
         disabled={!selection.canUnlock || blocked || busy}
-        title={selection.alwaysAsk > 0 ? "Identity provider sessions always ask and stay locked." : undefined}
+        title={
+          selection.alwaysAsk > 0
+            ? t("Identity provider sessions always ask and stay locked.")
+            : undefined
+        }
         onClick={() => actions.unlock(selection.unlockIds)}
       >
-        <LockOpenIcon /> Unlock
+        <LockOpenIcon /> {t("Unlock")}
       </Button>
       <Button size="sm" variant="outline" disabled={busy} onClick={() => onDelete(selection.ids)}>
-        <Trash2Icon /> Delete
+        <Trash2Icon /> {t("Delete")}
       </Button>
     </div>
   );

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 import type { KvAccessCommand, KvListView, KvPage } from "@/bridge";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /**
@@ -37,6 +38,7 @@ export function CategoryPane({
   onRun: (command: KvAccessCommand) => void;
   onDismiss: (imports: string[]) => void;
 }) {
+  const { t } = useI18n();
   const focused = useRef<HTMLLIElement | null>(null);
   useEffect(() => {
     if (focus) focused.current?.scrollIntoView?.({ block: "center" });
@@ -76,8 +78,13 @@ export function CategoryPane({
                 <span className="min-w-0 flex-1 truncate">{a.detail ? `${a.text} · ${a.detail}` : a.text}</span>
                 {/* Hides the notch's indicator only; Wipe removes the access. */}
                 {a.imports.length > 0 && !hidden ? (
-                  <Button size="sm" variant="ghost" title="Hide from the notch. Access stays until you wipe it." onClick={() => onDismiss(a.imports)}>
-                    Dismiss
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title={t("Hide from the notch. Access stays until you wipe it.")}
+                    onClick={() => onDismiss(a.imports)}
+                  >
+                    {t("Dismiss")}
                   </Button>
                 ) : null}
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => onRun(a.command as KvAccessCommand)}>

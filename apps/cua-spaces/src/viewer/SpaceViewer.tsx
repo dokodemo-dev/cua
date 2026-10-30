@@ -464,9 +464,9 @@ function ViewerSession({
               className="viewer-topbar-btn"
               aria-pressed={scaleMode === "actual"}
               onClick={() => setScaleMode((m) => (m === "fit" ? "actual" : "fit"))}
-              title={scaleMode === "fit" ? "Show at actual size (⌘0)" : "Scale to fit the window (⌘9)"}
+              title={scaleMode === "fit" ? t("spaces.viewer.actual_size_hint") : t("spaces.viewer.fit_hint")}
             >
-              {scaleMode === "fit" ? "Actual Size" : "Fit to Window"}
+              {scaleMode === "fit" ? t("spaces.viewer.actual_size") : t("spaces.viewer.fit_window")}
             </button>
             <button
               type="button"
@@ -572,17 +572,19 @@ export function TransferOverlayView({
   onCancel: () => void;
 }) {
   const t = useT(["spaces", "common", "errors"]);
+  // The core sends the words; the catalog translates those it has.
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   const isError = state.phase === "error";
   const progress = transferProgress(state);
   const sizeLabel = transferSizeLabel(state);
   return (
     <div className="viewer-transfer" role="status" aria-live="polite" data-phase={state.phase}>
       <div className="viewer-transfer-card">
-        <h2 className="viewer-transfer-title">{transferTitle(state)}</h2>
+        <h2 className="viewer-transfer-title">{tx(transferTitle(state))}</h2>
         {isError ? (
           <>
             <p className="viewer-transfer-error">
-              {state.message || "The transfer did not complete."}
+              {tx(state.message) || t("spaces.viewer.transfer_failed")}
             </p>
             <div className="viewer-transfer-actions">
               <button type="button" className="ghost-button" onClick={onRetry}>

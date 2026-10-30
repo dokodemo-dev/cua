@@ -16,6 +16,7 @@ import { toast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
 import { bindingFor } from "@/lib/keybindings";
 import { realSpaces, spaceState } from "@/lib/spaces";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { SIDEBAR_DEFAULT, useUiStore } from "@/stores/ui";
 import { Shortcut } from "@/components/ui/kbd";
@@ -118,6 +119,7 @@ function SidebarCreating({ spaces }: { spaces: Space[] }) {
  * Open again and Cancel, or why it failed with Try again and a toast. And a
  * way back into a first run left halfway. */
 export function AccountFooter() {
+  const { t } = useI18n();
   const { core } = useBridge();
   const { data: session, signIn, signOut, cancelSignIn, openExternal } = useSession();
   const plan = useRelayUsageView()?.planCard;
@@ -143,7 +145,7 @@ export function AccountFooter() {
     setDetails(false);
     void signIn().catch(() => {});
   };
-  const identity = footer.identity || (session.signedIn ? "Signed in" : null);
+  const identity = footer.identity || (session.signedIn ? t("Signed in") : null);
 
   return (
     <div className="mt-auto border-t px-3 py-2.5" data-signin={footer.state}>
@@ -158,7 +160,7 @@ export function AccountFooter() {
             {identity.slice(0, 1)}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-xs" title={footer.text} data-signin-identity="">
+            <div className="truncate text-xs" title={t(footer.text)} data-signin-identity="">
               <span className="block text-2xs text-muted-foreground">Signed in as </span>
               <span className="block truncate font-medium">{identity}</span>
             </div>
@@ -192,13 +194,14 @@ export function AccountFooter() {
         <div>
           <p className="flex items-center gap-2 text-xs" role="status">
             <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden />
-            <span className="truncate">{footer.text}</span>
+            <span className="truncate">{t(footer.text)}</span>
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-x-1 pl-5.5 text-2xs text-muted-foreground">
             {footer.code ? (
               <>
                 <span className="select-text">
-                  {footer.codeLabel} <span className="font-mono font-semibold text-foreground">{footer.code}</span>
+                  {t(footer.codeLabel)}{" "}
+                  <span className="font-mono font-semibold text-foreground">{footer.code}</span>
                 </span>
                 <span aria-hidden>·</span>
               </>

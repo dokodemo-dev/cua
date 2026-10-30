@@ -9,11 +9,13 @@ import { Shortcut } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
 import { bindingFor } from "@/lib/keybindings";
 import { useTheme } from "@/lib/theme";
+import { useI18n } from "@/lib/i18n";
 import { useUiStore } from "@/stores/ui";
 import { useNavItems } from "./nav";
 import { TopBarUpdateIndicator } from "./update-indicator";
 
 export function TopBar() {
+  const { t } = useI18n();
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
@@ -31,8 +33,8 @@ export function TopBar() {
         paddingRight: "calc(var(--titlebar-right-inset) + 0.75rem)",
       }}
     >
-      <Tooltip content={<span className="flex items-center gap-2">Show or hide sidebar <Shortcut spec={bindingFor("sidebar.toggle") ?? ""} /></span>}>
-        <Button variant="ghost" size="icon-sm" aria-label="Show or hide sidebar" onClick={toggleSidebar}>
+      <Tooltip content={<span className="flex items-center gap-2">{t("Show or hide sidebar")} <Shortcut spec={bindingFor("sidebar.toggle") ?? ""} /></span>}>
+        <Button variant="ghost" size="icon-sm" aria-label={t("Show or hide sidebar")} onClick={toggleSidebar}>
           <PanelLeftIcon className="text-muted-foreground" strokeWidth={1.75} />
         </Button>
       </Tooltip>
@@ -44,15 +46,15 @@ export function TopBar() {
         className="flex h-7 w-60 items-center gap-2 rounded-md border bg-card/60 px-2 text-xs text-muted-foreground shadow-xs outline-none hover:bg-card focus-visible:ring-2 focus-visible:ring-ring/60 dark:bg-white/[0.04]"
       >
         <SearchIcon className="size-3.5" />
-        <span className="flex-1 truncate text-left">Search or run a command</span>
+        <span className="flex-1 truncate text-left">{t("Search or run a command")}</span>
         <Shortcut spec={bindingFor("commandPalette.toggle") ?? ""} />
       </button>
       {sidebarOpen ? null : <TopBarUpdateIndicator />}
-      <Tooltip content={resolved === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}>
+      <Tooltip content={t(resolved === "dark" ? "Switch to light appearance" : "Switch to dark appearance")}>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={resolved === "dark" ? "Switch to light appearance" : "Switch to dark appearance"}
+          aria-label={t(resolved === "dark" ? "Switch to light appearance" : "Switch to dark appearance")}
           onClick={() => setPreference(resolved === "dark" ? "light" : "dark")}
         >
           {resolved === "dark" ? <SunIcon className="text-muted-foreground" strokeWidth={1.75} /> : <MoonIcon className="text-muted-foreground" strokeWidth={1.75} />}

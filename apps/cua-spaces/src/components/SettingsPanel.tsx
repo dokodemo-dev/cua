@@ -148,6 +148,10 @@ export function SettingsPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   // Re-renders the panel when the language changes (the core's rows are words too).
   const tl = useT("settings");
+  // The core sends English words; the catalogs key on those words, so passing
+  // them through `tl` translates the ones a translation exists for and leaves
+  // the rest as the core wrote them.
+  const tx = useCallback((text: string | null | undefined) => (text ? tl(text) : text), [tl]);
   const [localeChoice, setLocaleChoiceState] = useState(savedLocaleChoice);
   const telemetry = useMemo(() => telemetryProp ?? telemetryBridge(), [telemetryProp]);
   const experiments = useExperiments();
@@ -475,19 +479,19 @@ export function SettingsPanel({
         const error = sectionError(section.id);
         const isStorage = section.id === "storage";
         return (
-          <section className="st-group" aria-label={section.title} key={section.id}>
+          <section className="st-group" aria-label={tx(section.title) ?? undefined} key={section.id}>
             <div className="st-head">
-              <h3 className="st-title">{section.title}</h3>
+              <h3 className="st-title">{tx(section.title)}</h3>
               {section.button && (
                 <button
                   type="button"
                   className="dw-btn dw-btn-quiet"
                   data-owns-enter
                   disabled={!section.buttonEnabled}
-                  title={section.buttonHelp ?? undefined}
+                  title={tx(section.buttonHelp) ?? undefined}
                   onClick={() => (isStorage ? storage.send({ type: "save" }) : void configureAll())}
                 >
-                  {section.button}
+                  {tx(section.button)}
                 </button>
               )}
             </div>
@@ -496,6 +500,7 @@ export function SettingsPanel({
                 <SettingsRowItem
                   key={row.id}
                   row={row}
+                  translate={tx}
                   onPress={isStorage ? storage.press : press}
                   onChoose={isStorage ? storage.choose : choose}
                   onEdit={storage.edit}
@@ -547,12 +552,14 @@ export function SettingsPanel({
 /** One Settings row (also the first run's Volume page bucket rows). */
 export function SettingsRowItem({
   row,
+  translate,
   onPress,
   onChoose,
   onEdit,
   onOpenExternal,
 }: {
   row: SettingsRow;
+  translate: (text: string | null | undefined) => string | null | undefined;
   onPress: (row: SettingsRow) => void;
   onChoose: (row: SettingsRow, id: string) => void;
   onEdit: (row: SettingsRow, value: string) => void;
@@ -562,13 +569,13 @@ export function SettingsRowItem({
     case "field":
     case "secret":
       return (
-        <div className="st-row" data-dim={!row.enabled ? "true" : undefined} title={row.help ?? undefined}>
-          <span className="st-label">{row.label}</span>
+        <div className="st-row" data-dim={!row.enabled ? "true" : undefined} title={translate(row.help) ?? undefined}>
+          <span className="st-label">{translate(row.label)}</span>
           <input
             className="dw-input st-field"
             type={row.kind === "secret" ? "password" : "text"}
-            aria-label={row.label}
-            placeholder={row.placeholder ?? undefined}
+            aria-label={translate(row.label) ?? undefined}
+            placeholder={translate(row.placeholder) ?? undefined}
             value={row.value ?? ""}
             disabled={!row.enabled}
             autoComplete="off"
@@ -582,16 +589,16 @@ export function SettingsRowItem({
     case "error":
       return (
         <p className="st-error" role="alert">
-          {row.label}
+          {translate(row.label)}
         </p>
       );
     case "note":
       return (
         <p className="st-note">
-          {row.label}{" "}
+          {translate(row.label)}{" "}
           {row.linkUrl && (
             <button type="button" className="dw-link" data-owns-enter onClick={() => onOpenExternal(row.linkUrl!)}>
-              {row.linkLabel}
+              {translate(row.linkLabel)}
             </button>
           )}
         </p>
@@ -599,15 +606,15 @@ export function SettingsRowItem({
     case "toggle": {
       const on = row.options.find((o) => o.id === "on")?.active ?? false;
       return (
-        <div className="st-row" title={row.help ?? undefined}>
-          <span className="st-label">{row.label}</span>
+        <div className="st-row" title={translate(row.help) ?? undefined}>
+          <span className="st-label">{translate(row.label)}</span>
           <button
             type="button"
             role="switch"
             className="kv-switch"
             data-owns-enter
             aria-checked={on}
-            aria-label={row.label}
+            aria-label={translate(row.label) ?? undefined}
             disabled={!row.enabled}
             onClick={() => onChoose(row, on ? "off" : "on")}
           />
@@ -616,9 +623,9 @@ export function SettingsRowItem({
     }
     case "choice":
       return (
-        <div className="st-row" title={row.help ?? undefined}>
-          <span className="st-label">{row.label}</span>
-          <div className="st-segmented" role="radiogroup" aria-label={row.label}>
+        <div className="st-row" title={translate(row.help) ?? undefined}>
+          <span className="st-label">{translate(row.label)}</span>
+          <div className="st-segmented" role="radiogroup" aria-label={translate(row.label) ?? undefined}>
             {row.options.map((o) => (
               <button
                 key={o.id}
@@ -630,7 +637,7 @@ export function SettingsRowItem({
                 disabled={!row.enabled}
                 onClick={() => onChoose(row, o.id)}
               >
-                {o.label}
+                {translate(o.label)}
               </button>
             ))}
           </div>
@@ -640,7 +647,7 @@ export function SettingsRowItem({
       return (
         <div className="st-prompt">
           <div className="st-row">
-            <span className="st-label">{row.label}</span>
+            <span className="st-label">{translate(row.label)}</span>
             {row.button && (
               <button
                 type="button"
@@ -648,18 +655,18 @@ export function SettingsRowItem({
                 data-owns-enter
                 onClick={() => void writeClipboard(row.value ?? "").catch(() => {})}
               >
-                {row.button}
+                {translate(row.button)}
               </button>
             )}
           </div>
-          <textarea className="st-prompt-text" aria-label={row.label} readOnly rows={5} value={row.value ?? ""} />
+          <textarea className="st-prompt-text" aria-label={translate(row.label) ?? undefined} readOnly rows={5} value={row.value ?? ""} />
         </div>
       );
     case "link":
       return (
         <div className="st-row st-link-row">
           <button type="button" className="dw-link st-link" data-owns-enter disabled={!row.enabled} onClick={() => onPress(row)}>
-            {row.label}
+            {translate(row.label)}
           </button>
         </div>
       );
@@ -673,7 +680,7 @@ export function SettingsRowItem({
           title={path ? undefined : (row.help ?? undefined)}
         >
           <span className="st-label" role={row.id === "sign-in-code" ? "status" : undefined}>
-            {row.label}
+            {translate(row.label)}
           </span>
           {row.value && path && <MiddleText className="st-value" text={row.value} title={row.help} />}
           {row.value && !path && (
@@ -683,7 +690,7 @@ export function SettingsRowItem({
           )}
           {row.button && (
             <button type="button" className="dw-btn" data-owns-enter disabled={!row.enabled} onClick={() => onPress(row)}>
-              {row.button}
+              {translate(row.button)}
             </button>
           )}
         </div>

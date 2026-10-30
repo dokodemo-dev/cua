@@ -393,6 +393,10 @@ describe("SettingsPanel Privacy", () => {
     renderPanel({ telemetry: fakeTelemetry({ enabled: false, source: "env DO_NOT_TRACK", sourceKind: "do_not_track" }) });
     const on = await screen.findByRole("radio", { name: "On" });
     expect(on).toBeDisabled();
+    // The switch reads Off: the environment turned usage data off, so the
+    // selected pill must never say On while the row is locked.
+    expect(on).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Off" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByTitle("Set by env DO_NOT_TRACK")).toBeInTheDocument();
   });
 

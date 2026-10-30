@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/alert-dialog";
 import { Segmented } from "@/components/ui/segmented";
 import { toastError } from "@/components/ui/toast";
 import { hostOs, keyvaultUnlockWay } from "@/lib/host-labels";
+import { useI18n } from "@/lib/i18n";
 
 import { ApprovalDialog } from "./approval-dialog";
 import { CategoryPane } from "./category-pane";
@@ -41,6 +42,7 @@ interface DeleteAsk {
  * row is brought forward.
  */
 export function KeyvaultPage({ initialView = "all", focus = null }: { initialView?: KvCategory; focus?: string | null }) {
+  const { t } = useI18n();
   const kv = useKeyvault();
   const { data, unlock, unlockItems, lockItems, deleteItems, setUp, approve, deny, runCommand, dismissAccess, showItems, vaultAction, pane } = kv;
   const { core, mode } = useBridge();
@@ -83,24 +85,24 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
     setPending((n) => n + 1);
     void p.catch(reportFailure(title)).finally(() => setPending((n) => n - 1));
   };
-  const unlockVault = () => act("Couldn't unlock Keyvault", unlock());
+  const unlockVault = () => act(t("Couldn't unlock Keyvault"), unlock());
   const setUpVault = () => {
     setSettingUp(true);
     void setUp()
-      .then(setRecoveryKey, reportFailure("Couldn't set up Keyvault"))
+      .then(setRecoveryKey, reportFailure(t("Couldn't set up Keyvault")))
       .finally(() => setSettingUp(false));
   };
   const actions = {
-    lock: (ids: string[]) => act("Couldn't change access", lockItems(ids)),
-    unlock: (ids: string[]) => act("Couldn't change access", unlockItems(ids)),
+    lock: (ids: string[]) => act(t("Couldn't change access"), lockItems(ids)),
+    unlock: (ids: string[]) => act(t("Couldn't change access"), unlockItems(ids)),
   };
   /** A native host confirms in its own alert; other hosts get the core's words here. */
   const requestDelete = (ids: string[]) => {
-    if (isNativeHost(mode) || !data) return act("Couldn't delete", deleteItems(ids));
+    if (isNativeHost(mode) || !data) return act(t("Couldn't delete"), deleteItems(ids));
     const copies = core.tryCall<number>("keyvault.liveCopySpaces", { overview: data.overview, ids, now: Date.now() }) ?? 0;
     const ask = core.tryCall<{ title: string; message: string }>("keyvault.deleteConfirm", { count: ids.length, liveCopies: copies });
     if (ask) setAsking({ ids, ...ask });
-    else act("Couldn't delete", deleteItems(ids));
+    else act(t("Couldn't delete"), deleteItems(ids));
   };
   const categories = views?.sidebar.categories ?? [];
   const list = views && category !== "all" ? pane({ kind: "category", category }) : null;
@@ -110,12 +112,12 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
     <div className="flex h-full flex-col">
       <div className="mx-auto w-full max-w-3xl px-8 pt-6">
         <PageHeader
-          title="Keyvault"
-          description="Saved logins your agents can use. Each use asks you first unless you allow it."
+          title={t("Keyvault")}
+          description={t("Saved logins your agents can use. Each use asks you first unless you allow it.")}
           actions={
             locked ? (
               <Button variant="outline" onClick={unlockVault}>
-                <LockIcon /> Unlock
+                <LockIcon /> {t("Unlock")}
               </Button>
             ) : null
           }
@@ -123,7 +125,9 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
         {locked ? (
           <div className="mb-4 flex items-center gap-3 rounded-xl border bg-brand-surface/60 px-4 py-3">
             <LockIcon className="size-4 text-brand-strong" />
-            <p className="flex-1 text-[13px]">Keyvault is locked. Unlock to change who can use a login.</p>
+            <p className="flex-1 text-[13px]">
+              {t("Keyvault is locked. Unlock to change who can use a login.")}
+            </p>
           </div>
         ) : null}
         {views?.page.disabledBanner ? (
@@ -143,14 +147,14 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
           <SetUpVault
             passphrase={views?.page.form?.method === "passphrase"}
             help={views?.page.form?.help ?? null}
-            label={views?.page.labels.setUp ?? "Set up Keyvault"}
+            label={views?.page.labels.setUp ?? t("Set up Keyvault")}
             busy={settingUp}
             onSetUp={setUpVault}
           />
         ) : categories.length ? (
           <div className="mb-3">
             <Segmented
-              aria-label="Keyvault"
+              aria-label={t("Keyvault")}
               value={category}
               onValueChange={setCategory}
               options={categories.map((c) => ({
@@ -175,8 +179,8 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
       <div className="min-h-0 flex-1 overflow-y-auto">
         {canSetup ? null : !views || !data ? (
           <div className="mx-auto max-w-3xl px-8">
-            <EmptyState icon={<KeyRoundIcon />} title="Keyvault">
-              The list needs the app core, which isn't loaded.
+            <EmptyState icon={<KeyRoundIcon />} title={t("Keyvault")}>
+              {t("The list needs the app core, which isn't loaded.")}
             </EmptyState>
           </div>
         ) : !views.page.ready ? null : list ? (
@@ -187,9 +191,9 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
             focus={focused}
             busy={busy}
             onReview={setReviewing}
-            onDeny={(id) => act("Couldn't deny", deny(id))}
-            onRun={(c) => act("Couldn't change access", runCommand(c))}
-            onDismiss={(imports) => act("Couldn't dismiss", dismissAccess(imports))}
+            onDeny={(id) => act(t("Couldn't deny"), deny(id))}
+            onRun={(c) => act(t("Couldn't change access"), runCommand(c))}
+            onDismiss={(imports) => act(t("Couldn't dismiss"), dismissAccess(imports))}
           />
         ) : (
           <VaultList
@@ -199,7 +203,7 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
             busy={busy}
             send={vaultAction}
             actions={actions}
-            onShowItems={() => act("Couldn't show the items", showItems())}
+            onShowItems={() => act(t("Couldn't show the items"), showItems())}
             onDelete={requestDelete}
           />
         )}
@@ -213,11 +217,11 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
           onClose={() => setReviewing(null)}
           onDeny={(id) => {
             setReviewing(null);
-            act("Couldn't deny", deny(id));
+            act(t("Couldn't deny"), deny(id));
           }}
           onApprove={(id, items) => {
             setReviewing(null);
-            act("Couldn't approve", approve(id, items));
+            act(t("Couldn't approve"), approve(id, items));
           }}
         />
       ) : null}
@@ -226,9 +230,9 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
         onOpenChange={(open) => !open && setAsking(null)}
         title={asking?.title ?? ""}
         description={asking?.message}
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         destructive
-        onConfirm={() => asking && act("Couldn't delete", deleteItems(asking.ids))}
+        onConfirm={() => asking && act(t("Couldn't delete"), deleteItems(asking.ids))}
       />
     </div>
   );
@@ -236,22 +240,29 @@ export function KeyvaultPage({ initialView = "all", focus = null }: { initialVie
 
 /** No vault yet: what it is for, how it is protected, and the one next step. */
 function SetUpVault({ passphrase, help, label, busy, onSetUp }: { passphrase: boolean; help: string | null; label: string; busy: boolean; onSetUp: () => void }) {
+  const { t } = useI18n();
   return (
     <div data-vault-setup>
       <EmptyState
         icon={<KeyRoundIcon />}
-        title="No Keyvault yet"
+        title={t("No Keyvault yet")}
         action={
           <Button onClick={onSetUp} disabled={busy}>
-            {busy ? "Setting up\u2026" : label}
+            {busy ? t("Setting up…") : label}
           </Button>
         }
       >
-        Set it up to save logins your agents can use.{" "}
-        {passphrase ? "You choose a passphrase to protect it." : (help ?? `${capitalized(keyvaultUnlockWay())} or a passphrase protects it.`)}
+        {t("Set it up to save logins your agents can use.")}{" "}
+        {passphrase
+          ? t("You choose a passphrase to protect it.")
+          : (help ??
+            t("{method} or a passphrase protects it.", {
+              method: t(capitalized(keyvaultUnlockWay())),
+            }))}
       </EmptyState>
       <p className="mt-3 px-1 text-center text-xs text-muted-foreground">
-        Or run <code className="font-mono">{KEYVAULT_SETUP_COMMAND}</code> in {hostOs() === "macos" ? "Terminal" : "a terminal"}.
+        {t("Or run")} <code className="font-mono">{KEYVAULT_SETUP_COMMAND}</code>{" "}
+        {t("in {place}.", { place: t(hostOs() === "macos" ? "Terminal" : "a terminal") })}
       </p>
     </div>
   );
@@ -259,11 +270,16 @@ function SetUpVault({ passphrase, help, label, busy, onSetUp }: { passphrase: bo
 
 /** The recovery key, shown once after setup: the only other way in. */
 function RecoveryKey({ value, onDone }: { value: string; onDone: () => void }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   return (
     <div data-vault-recovery className="mb-4 rounded-xl border bg-brand-surface/60 px-4 py-3">
-      <p className="text-[13px] font-medium">Save your recovery key</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">It's shown once. You need it if {keyvaultUnlockWay()} or your passphrase stops working.</p>
+      <p className="text-[13px] font-medium">{t("Save your recovery key")}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {t("It's shown once. You need it if {method} or your passphrase stops working.", {
+          method: t(capitalized(keyvaultUnlockWay())),
+        })}
+      </p>
       <div className="mt-2 flex items-center gap-2">
         <code className="flex-1 truncate rounded-md bg-background px-2 py-1 font-mono text-[13px]" data-recovery-key>
           {value}
@@ -271,13 +287,13 @@ function RecoveryKey({ value, onDone }: { value: string; onDone: () => void }) {
         <Button
           size="sm"
           variant="outline"
-          aria-label={copied ? "Copied" : "Copy recovery key"}
+          aria-label={copied ? t("Copied") : t("Copy recovery key")}
           onClick={() => void navigator.clipboard?.writeText(value).then(() => setCopied(true), () => {})}
         >
-          {copied ? <CheckIcon /> : <CopyIcon />} {copied ? "Copied" : "Copy"}
+          {copied ? <CheckIcon /> : <CopyIcon />} {copied ? t("Copied") : t("Copy")}
         </Button>
         <Button size="sm" variant="ghost" onClick={onDone}>
-          Done
+          {t("Done")}
         </Button>
       </div>
     </div>

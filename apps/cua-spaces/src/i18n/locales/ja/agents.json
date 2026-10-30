@@ -4,5 +4,13 @@
   "agents.routine.schedule": "スケジュール",
   "agents.routine.minutes": "分",
   "agents.routine.time": "時刻",
-  "agents.routine.day": "曜日"
+  "agents.routine.day": "曜日",
+  "Agents": "エージェント",
+  "Notifications": "通知",
+  "No agents yet.": "エージェントはまだいません。",
+  "Mark all read": "すべて既読にする",
+  "No notifications": "通知はありません",
+  "This computer": "このコンピューター",
+  "Memory": "メモリ",
+  "Routines": "ルーティン"
 }

@@ -11,6 +11,7 @@ import { Dialog, DialogPopup, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { toastError } from "@/components/ui/toast";
 import { macosLimitText } from "@/lib/spaces";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useCreateFromWizard } from "@/hooks/use-new-space";
 import { ConnectCloudDialog } from "./connect-cloud-dialog";
@@ -141,8 +142,9 @@ function WizardBody({ view: v }: { view: WizardView }) {
 }
 
 function Steps({ steps }: { steps: WizardView["steps"] }) {
+  const { t } = useI18n();
   return (
-    <ol aria-label="Steps" className="flex items-center gap-1 text-xs">
+    <ol aria-label={t("Steps")} className="flex items-center gap-1 text-xs">
       {steps.map((s, i) => (
         <li key={s.label} data-step-state={s.state} aria-current={s.state === "current" ? "step" : undefined} className="flex items-center gap-1">
           {i > 0 ? <ChevronRightIcon className="size-3 text-muted-foreground/50" /> : null}

@@ -22,6 +22,7 @@ import { ThisMacNudges } from "@/components/this-mac-nudges";
 import { useGlobalKeybindings } from "@/hooks/use-global-keybindings";
 import { useNotificationToasts } from "@/hooks/use-notification-toasts";
 import { useThemeHostSync, useThemeSync } from "@/lib/theme";
+import { useLanguageSync } from "@/lib/i18n";
 import { useUiStore } from "@/stores/ui";
 
 export const Route = createRootRoute({ component: RootLayout });
@@ -31,6 +32,7 @@ const StartupScreen = lazy(() => import("@/components/startup/StartupScreen").th
 
 function RootLayout() {
   useThemeSync();
+  useLanguageSync();
   useThemeHostSync();
   const { mode } = useBridge();
   // Lets hosts and tests see which bridge the page is on.

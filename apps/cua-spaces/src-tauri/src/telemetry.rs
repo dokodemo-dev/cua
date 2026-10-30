@@ -211,7 +211,16 @@ pub fn telemetry_acknowledge_link_notice() -> Result<TelemetryView, String> {
 
 #[tauri::command]
 pub fn telemetry_status() -> Result<TelemetryView, String> {
-    Ok(view(client()?))
+    let v = view(client()?);
+    // Debug aid: the switch's decision under DO_NOT_TRACK / CUA_TELEMETRY,
+    // so a report of "it shows On but the environment says off" can be traced.
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "[cua-spaces] telemetry: enabled={} source_kind={} source={}",
+            v.enabled, v.source_kind, v.source
+        );
+    }
+    Ok(v)
 }
 
 /// The Settings switch: writes `[telemetry] enabled` to
@@ -230,7 +239,14 @@ pub fn telemetry_set_enabled(enabled: bool) -> Result<TelemetryView, String> {
 pub fn telemetry_acknowledge_notice() -> Result<TelemetryView, String> {
     let t = client()?;
     app_telemetry::acknowledge_notice(t);
-    Ok(view(t))
+    let v = view(t);
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "[cua-spaces] telemetry(ack): enabled={} source_kind={} source={}",
+            v.enabled, v.source_kind, v.source
+        );
+    }
+    Ok(v)
 }
 
 /// The first run left Welcome with its usage-data switch at `on`: writes the

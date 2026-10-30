@@ -8,6 +8,7 @@ import type { CuaDesktopBridge } from "@/bridge/detect";
 import { ELECTRON_BRIDGE_CHANNEL } from "@/bridge/electron-channels";
 import { useVideoSlot } from "@/components/video/use-video-slot";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * A picture-in-picture panel's contents (`/pip`), in the Electron shell's
@@ -54,6 +55,7 @@ export function pipBadge(phase: "connecting" | "live" | "failed" | null, reason?
 const desktop = () => (window as { cuaDesktop?: CuaDesktopBridge }).cuaDesktop;
 
 export function PipView({ params }: { params: PipParams }) {
+  const { t: t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
   const [attempt, setAttempt] = useState(0);
   const slot = useVideoSlot(ref, {
@@ -106,10 +108,10 @@ export function PipView({ params }: { params: PipParams }) {
       ) : null}
       <div className="app-drag absolute inset-x-0 top-0 flex h-8 items-center gap-1 bg-gradient-to-b from-black/75 to-transparent pr-1 pl-3 opacity-0 transition-opacity group-hover:opacity-100">
         <span className="min-w-0 flex-1 truncate text-xs text-white/90">{label}</span>
-        <button type="button" title="Open Space" aria-label="Open Space" onClick={openSpace} className="grid size-6 place-items-center rounded-md text-white/80 hover:bg-white/15 hover:text-white">
+        <button type="button" title={t("Open Space")} aria-label={t("Open Space")} onClick={openSpace} className="grid size-6 place-items-center rounded-md text-white/80 hover:bg-white/15 hover:text-white">
           <AppWindowIcon className="size-3.5" />
         </button>
-        <button type="button" title="Close" aria-label="Close" onClick={() => window.close()} className="grid size-6 place-items-center rounded-md text-white/80 hover:bg-white/15 hover:text-white">
+        <button type="button" title={t("Close")} aria-label={t("Close")} onClick={() => window.close()} className="grid size-6 place-items-center rounded-md text-white/80 hover:bg-white/15 hover:text-white">
           <XIcon className="size-3.5" />
         </button>
       </div>

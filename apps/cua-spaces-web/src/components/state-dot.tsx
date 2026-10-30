@@ -4,6 +4,7 @@
 import { useBridge, type Space } from "@/bridge";
 import { STATE_LABEL, type SpaceState } from "@/lib/spaces";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 const DOT: Record<SpaceState, string> = {
   failed: "bg-destructive",
@@ -20,12 +21,13 @@ const DOT: Record<SpaceState, string> = {
  * page's word for the state.
  */
 export function StateLabel({ state, space, className }: { state: SpaceState; space?: Space; className?: string }) {
+  const { t } = useI18n();
   const { core } = useBridge();
   const word = space ? (core.tryCall<string>("sidebar.statusText", { space }) ?? STATE_LABEL[state]) : STATE_LABEL[state];
   return (
     <span data-state-label={state} className={cn("inline-flex items-center gap-1.5 text-xs text-muted-foreground", className)}>
       <span className={cn("size-1.5 rounded-full", DOT[state])} aria-hidden />
-      {word}
+      {t(word)}
     </span>
   );
 }

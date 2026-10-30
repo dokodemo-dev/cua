@@ -8,6 +8,7 @@ import type { TeleportStore, Tri, VaultAction, VaultRow, VaultView } from "@/bri
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { vaultLines, type VaultLine } from "@/lib/keyvault";
+import { useI18n } from "@/lib/i18n";
 
 export const KIND_ICON = { cookie: CookieIcon, local_storage: DatabaseIcon, password: KeyRoundIcon, file: FileIcon } as const;
 
@@ -18,6 +19,7 @@ export const KIND_ICON = { cookie: CookieIcon, local_storage: DatabaseIcon, pass
  * keeps the selection; the review sends exactly it.
  */
 export function SavedItems({ view, query, teleport }: { view: VaultView; query: string; teleport: TeleportStore }) {
+  const { t } = useI18n();
   const send = (action: VaultAction) => teleport.sendVault(action);
   if (view.namesHidden) {
     return (
@@ -37,8 +39,8 @@ export function SavedItems({ view, query, teleport }: { view: VaultView; query: 
       <div className="flex items-center gap-2 border-b px-4 py-1.5">
         <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
         <input
-          aria-label="Search saved items"
-          placeholder="Search saved items"
+          aria-label={t("Search saved items")}
+          placeholder={t("Search saved items")}
           value={query}
           onChange={(e) => send({ type: "query", text: e.target.value })}
           className="h-7 min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground"
@@ -68,6 +70,7 @@ export function SavedItems({ view, query, teleport }: { view: VaultView; query: 
 const triChecked = (t: Tri) => t === "on";
 
 function SavedLine({ line, send }: { line: VaultLine; send: (a: VaultAction) => void }) {
+  const { t } = useI18n();
   switch (line.type) {
     case "site":
       return (
@@ -89,7 +92,7 @@ function SavedLine({ line, send }: { line: VaultLine; send: (a: VaultAction) => 
           open={line.files.open}
           label="Send Files"
           icon={<FolderIcon className="size-3.5 text-muted-foreground" />}
-          title="Files"
+          title={t("Files")}
           detail={`${line.files.count} file${line.files.count === 1 ? "" : "s"}`}
           onSelect={() => send({ type: "toggle-group", key: line.files.key })}
           onOpen={() => send({ type: "toggle-open", key: line.files.key })}

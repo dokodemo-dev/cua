@@ -6,6 +6,7 @@ import type { KeyboardEvent } from "react";
 
 import type { ImageFieldView, WizardAction } from "@/bridge";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const optionId = (ref: string) => `ns-image-${ref.replace(/[^a-z0-9]/gi, "-")}`;
@@ -27,6 +28,7 @@ export function ImageField({
   view: ImageFieldView;
   send: (action: WizardAction) => void;
 }) {
+  const { t } = useI18n();
   const active = view.groups.flatMap((g) => g.rows).find((r) => r.highlighted);
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -83,8 +85,8 @@ export function ImageField({
       <button
         type="button"
         data-image-toggle=""
-        aria-label="Show images"
-        title="Show images"
+        aria-label={t("Show images")}
+        title={t("Show images")}
         aria-expanded={view.open}
         // Keep the field's focus, so its blur does not close the list first.
         onMouseDown={(event) => event.preventDefault()}

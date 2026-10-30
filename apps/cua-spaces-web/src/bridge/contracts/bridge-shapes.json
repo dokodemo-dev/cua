@@ -2812,6 +2812,13 @@
                 "dark"
               ]
             },
+            "language": {
+              "enum": [
+                "system",
+                "ja",
+                "en"
+              ]
+            },
             "menuBar": {
               "type": "boolean"
             },
@@ -4560,6 +4567,13 @@
     "WkSettings": {
       "type": "object",
       "properties": {
+        "language": {
+          "enum": [
+            "system",
+            "ja",
+            "en"
+          ]
+        },
         "page": {
           "type": "object",
           "properties": {

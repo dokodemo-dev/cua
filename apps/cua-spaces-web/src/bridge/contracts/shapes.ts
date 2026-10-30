@@ -243,6 +243,7 @@ const SettingsShape = ref(
   obj<SettingsSnapshot>()({
     values: obj<SettingsValues>()({
       theme: oneOf("system", "light", "dark"),
+      language: opt(oneOf("system", "ja", "en")),
       menuBar: bool,
       hotkey: str,
       telemetry: bool,
@@ -1163,6 +1164,7 @@ const WkSessionShape = ref(
 const WkSettingsShape = ref(
   "WkSettings",
   obj<WkSettings>()({
+    language: opt(oneOf("system", "ja", "en")),
     page: object({
       title: str,
       sections: list(

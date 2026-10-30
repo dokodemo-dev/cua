@@ -10,6 +10,7 @@ import { CuaKey } from "@/components/cua-key";
 import { EmptyState, Page, PageHeader } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { toastError } from "@/components/ui/toast";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/notifications/")({ component: NotificationsPage });
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/notifications/")({ component: Notificatio
  * Space when it is about one) and marks it read; clicking again closes it.
  */
 function NotificationsPage() {
+  const { t } = useI18n();
   const { data, unsupported, error, markAllRead, markRead } = useNotifications();
   const view = data?.view;
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
@@ -39,21 +41,21 @@ function NotificationsPage() {
   return (
     <Page className="max-w-3xl">
       <PageHeader
-        title={view?.title ?? "Notifications"}
+        title={view?.title ?? t("Notifications")}
         actions={
           view?.markAllLabel ? (
-            <Button variant="outline" size="sm" onClick={() => void markAllRead().catch(toastError("Couldn't mark them read"))} data-mark-all>
+            <Button variant="outline" size="sm" onClick={() => void markAllRead().catch(toastError(t("Couldn't mark them read")))} data-mark-all>
               {view.markAllLabel}
             </Button>
           ) : null
         }
       />
       {unsupported ? (
-        <EmptyState icon={<BellIcon />} title="Notifications">
-          Notifications are not available in this app yet.
+        <EmptyState icon={<BellIcon />} title={t("Notifications")}>
+          {t("Notifications are not available in this app yet.")}
         </EmptyState>
       ) : error && !data ? (
-        <EmptyState icon={<BellIcon />} title="Couldn't read notifications">
+        <EmptyState icon={<BellIcon />} title={t("Couldn't read notifications")}>
           {error.message}
         </EmptyState>
       ) : !view ? null : view.rows.length === 0 ? (
@@ -76,6 +78,7 @@ function NotificationsPage() {
 }
 
 function NotificationRow({ row, entry, open, onToggle }: { row: NotificationLine; entry: NotificationInput | undefined; open: boolean; onToggle: () => void }) {
+  const { t } = useI18n();
   const detailId = `notification-${row.id}`;
   const body = entry?.body.trim() ?? "";
   return (
@@ -106,7 +109,7 @@ function NotificationRow({ row, entry, open, onToggle }: { row: NotificationLine
           ) : null}
           {entry?.space ? (
             <Button variant="outline" size="sm" render={<Link to="/spaces/$spaceId" params={{ spaceId: entry.space }} />} data-notification-open-space>
-              Open Space
+              {t("Open Space")}
             </Button>
           ) : null}
         </div>

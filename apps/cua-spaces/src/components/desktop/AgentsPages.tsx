@@ -90,6 +90,7 @@ function Group({ title, children }: { title?: string; children: React.ReactNode 
  */
 export function AgentsPage({ bridge, thisMachine, now = Date.now }: { bridge: AgentsBridge; thisMachine: string | null; now?: () => number }) {
   const t = useT("agents");
+  const tx = useCallback((text: string | null | undefined) => (text ? t(text) : text), [t]);
   const [input, setInput] = useState<AgentsInput>({ agents: [], thisMachine });
   // Persistent agents adoption: the page was opened.
   useEffect(() => telemetryBridge().recordSignals(featureSignals("agents_page_open")), []);
@@ -143,8 +144,8 @@ export function AgentsPage({ bridge, thisMachine, now = Date.now }: { bridge: Ag
   const d = v.detail;
   return (
     <div className="ag-page" aria-busy={v.busy}>
-      <Group title={v.title}>
-        {v.rows.length === 0 && <p className="st-note">{v.emptyText}</p>}
+      <Group title={tx(v.title) ?? ""}>
+        {v.rows.length === 0 && <p className="st-note">{tx(v.emptyText)}</p>}
         {v.rows.map((r) => (
           <div className="st-row" key={r.name} data-selected={r.selected || undefined}>
             <button type="button" className="st-label ag-link" onClick={() => void send({ type: 'select', name: r.name })}>
@@ -470,11 +471,13 @@ export function NotificationsPage({
   bridge: AgentsBridge;
   now?: () => number;
 }) {
+  const t = useT("agents");
+  const tx = useCallback((text: string | null | undefined) => (text ? t(text) : text), [t]);
   const v = useMemo(() => notificationsView(feed, now()), [feed, now]);
   return (
     <div className="ag-page">
-      <Group title={v.title}>
-        {v.rows.length === 0 && <p className="st-note">{v.emptyText}</p>}
+      <Group title={tx(v.title) ?? ""}>
+        {v.rows.length === 0 && <p className="st-note">{tx(v.emptyText)}</p>}
         {v.rows.map((l) => (
           <div className="st-row" key={l.id} data-unread={l.on || undefined}>
             <span className="st-label">{l.text}</span>

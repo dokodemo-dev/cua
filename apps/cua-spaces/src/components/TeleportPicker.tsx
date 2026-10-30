@@ -39,6 +39,8 @@ export function TeleportPicker({
   apps,
 }: { bridge?: TeleportBridge; apps?: TeleportAppsBridge } = {}) {
   const t = useT(["teleport", "common"]);
+  // The core sends the words; the catalog translates those it has.
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   const teleport = useMemo(() => bridge ?? createTeleportBridge(), [bridge]);
   const appsBridge = useMemo(() => apps ?? createTeleportAppsBridge(), [apps]);
   const [config, setConfig] = useState<TeleportPickerConfig | null>(null);
@@ -181,7 +183,7 @@ export function TeleportPicker({
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
             >
-              {t.label}
+              {tx(t.label)}
             </button>
           ))}
         </div>
@@ -255,6 +257,7 @@ function PickView({
   onCancel: () => void;
 }) {
   const t = useT(["teleport", "common"]);
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   const gridTab: PickerGridTab = tab === "space" ? "windows" : "space";
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -395,7 +398,7 @@ function PickView({
 
       <div className="hp-grid-wrap ta-grid-wrap">
         {grid.sections.map((sec) => (
-          <ul key={sec.title} className="hp-grid" role="listbox" aria-label={sec.title || "Windows"}>
+          <ul key={sec.title} className="hp-grid" role="listbox" aria-label={tx(sec.title) || t("Windows")}>
             {sec.tiles.map((t) => (
               <PickerTileView
                 key={t.id}
@@ -408,7 +411,7 @@ function PickView({
             ))}
           </ul>
         ))}
-        {loaded && grid.emptyText && <p className="hp-empty">{grid.emptyText}</p>}
+        {loaded && grid.emptyText && <p className="hp-empty">{tx(grid.emptyText)}</p>}
       </div>
 
       <footer className="hp-footer">
@@ -427,7 +430,7 @@ function PickView({
             disabled={!primary.enabled}
             onClick={() => current && activate(current)}
           >
-            {primary.label}
+            {tx(primary.label)}
           </button>
         </div>
       </footer>

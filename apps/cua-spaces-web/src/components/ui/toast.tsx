@@ -6,6 +6,7 @@ import { CircleAlertIcon, CircleCheckIcon, InfoIcon, XIcon } from "lucide-react"
 import type { ReactNode } from "react";
 
 import { CuaKey } from "@/components/cua-key";
+import { useI18n } from "@/lib/i18n";
 
 export const toastManager = Toast.createToastManager();
 
@@ -83,6 +84,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 function ToastList() {
+  // `t` is a toast here, so the translator is `tr`.
+  const { t: tr } = useI18n();
   const { toasts } = Toast.useToastManager();
   return toasts.map((t) => {
     const Icon = ICONS[(t.type as ToastType | undefined) ?? "info"] ?? InfoIcon;
@@ -112,7 +115,7 @@ function ToastList() {
             </button>
           ) : null}
         </Toast.Content>
-        <Toast.Close aria-label="Dismiss" className="rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+        <Toast.Close aria-label={tr("Dismiss")} className="rounded-md p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground">
           <XIcon className="size-3.5" />
         </Toast.Close>
       </Toast.Root>

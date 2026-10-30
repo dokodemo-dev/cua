@@ -709,6 +709,7 @@ function DriveStep({
               <SettingsRowItem
                 key={row.id}
                 row={row}
+                translate={(text) => text}
                 onPress={onStoragePress}
                 onChoose={onStorageChoose}
                 onEdit={onStorageEdit}

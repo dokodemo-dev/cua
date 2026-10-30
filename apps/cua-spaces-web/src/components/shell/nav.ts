@@ -5,6 +5,7 @@ import { BellIcon, BotIcon, HardDriveIcon, KeyRoundIcon, LayoutGridIcon, ServerI
 
 import { useExperimentFlags } from "@/bridge";
 import type { KeybindingCommand } from "@/lib/keybindings";
+import { useI18n } from "@/lib/i18n";
 
 export interface NavItem {
   to: "/spaces" | "/machines" | "/agents" | "/volume" | "/keyvault" | "/notifications" | "/settings";
@@ -29,7 +30,9 @@ const VOLUME_ITEM: NavItem = { to: "/volume", label: "Volume", icon: HardDriveIc
 /** The nav, with Volume while the Cua Volume experiment is on. */
 export function useNavItems(): NavItem[] {
   const experiments = useExperimentFlags();
-  if (!experiments?.cuaVolume) return NAV_ITEMS;
+  const { t } = useI18n();
+  const translated = NAV_ITEMS.map((item) => ({ ...item, label: t(item.label) }));
+  if (!experiments?.cuaVolume) return translated;
   const i = NAV_ITEMS.findIndex((n) => n.to === "/agents") + 1;
-  return [...NAV_ITEMS.slice(0, i), VOLUME_ITEM, ...NAV_ITEMS.slice(i)];
+  return [...translated.slice(0, i), { ...VOLUME_ITEM, label: t(VOLUME_ITEM.label) }, ...translated.slice(i)];
 }

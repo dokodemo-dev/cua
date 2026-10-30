@@ -14,17 +14,20 @@ import { useT } from "../i18n";
  */
 export function FactList({ facts, copyText }: { facts: SpaceDetailView["facts"]; copyText?: WriteText }) {
   const t = useT("spaces");
+  // The core sends the labels; a catalog entry keyed by the English word
+  // translates it, and anything without one stays as the core wrote it.
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   return (
     <dl className="dw-list" aria-label={t("spaces.facts.label")}>
       {facts.map((fact) => (
         <div key={fact.label}>
-          <dt>{fact.label}</dt>
+          <dt>{tx(fact.label)}</dt>
           <dd className="dw-fact-value">
             <span className={fact.copy ? "dw-mono" : undefined} title={fact.help ?? fact.value}>
               {fact.value}
             </span>
             {fact.warning && (
-              <span className="dw-fact-warning" role="img" aria-label={fact.warning.help} title={fact.warning.help}>
+              <span className="dw-fact-warning" role="img" aria-label={tx(fact.warning.help) ?? undefined} title={tx(fact.warning.help) ?? undefined}>
                 <Sym name={fact.warning.symbol} size={12} />
               </span>
             )}

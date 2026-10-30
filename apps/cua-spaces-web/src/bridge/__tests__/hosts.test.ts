@@ -195,6 +195,7 @@ describe("tauri adapter", () => {
     const s = await a.call("settings.get", {});
     expect(s.values).toEqual({
       theme: "dark",
+      language: "system",
       menuBar: true,
       hotkey: "⌘⇧Space",
       telemetry: false,
@@ -207,12 +208,16 @@ describe("tauri adapter", () => {
     await a.call("settings.set", { key: "defaultLocation", value: "local" });
     await a.call("settings.set", { key: "launchAtLogin", value: false });
     await expect(a.call("settings.set", { key: "updateChannel", value: "beta" })).rejects.toThrow(/not available/);
+    const japanese = await a.call("settings.set", { key: "language", value: "ja" });
+    expect(japanese.values.language).toBe("ja");
+    expect(win.__CUA_UI_STORAGE__?.["cua.settings.language"]).toBe("ja");
     expect(win.__CUA_UI_STORAGE__?.["cua.settings.appearance"]).toBe("light");
     expect(calls.filter(([c]) => !["telemetry_status", "get_default_location", "login_item_status"].includes(c))).toEqual([
       ["ui_storage_set", { key: "cua.settings.appearance", value: "light" }],
       ["telemetry_set_enabled", { enabled: true }],
       ["set_default_location", { on: "local" }],
       ["login_item_set", { on: false }],
+      ["ui_storage_set", { key: "cua.settings.language", value: "ja" }],
     ]);
   });
 
@@ -450,6 +455,18 @@ const settingsWithLogin = {
 };
 
 describe("webkit adapter", () => {
+  it("reads and saves the native display language through the existing settings bridge", async () => {
+    let language = "ja";
+    const { win, sent } = webkitHost((req) => {
+      if (req.method === "settings.choose") language = String(req.args?.option);
+      return ok({ ...settingsPage, language });
+    });
+    const adapter = createWebkitAdapter(win);
+    expect((await adapter.call("settings.get", {})).values.language).toBe("ja");
+    expect((await adapter.call("settings.set", { key: "language", value: "en" })).values.language).toBe("en");
+    expect(sent).toContainEqual(expect.objectContaining({ method: "settings.choose", args: { row: "language", option: "en" } }));
+  });
+
   it("speaks the SwiftUI host's envelope and maps spaces back to registry rows", async () => {
     const { win, sent } = webkitHost(() => ok({ loaded: true, selectedId: null, spaces: [{ space: wkSpace, deleting: false }] }));
     const rows = await createWebkitAdapter(win).call("spaces.list", {});

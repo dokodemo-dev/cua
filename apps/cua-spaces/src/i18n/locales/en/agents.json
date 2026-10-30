@@ -4,5 +4,13 @@
   "agents.routine.schedule": "Schedule",
   "agents.routine.minutes": "Minutes",
   "agents.routine.time": "Time",
-  "agents.routine.day": "Day"
+  "agents.routine.day": "Day",
+  "Agents": "Agents",
+  "Notifications": "Notifications",
+  "No agents yet.": "No agents yet.",
+  "Mark all read": "Mark all read",
+  "No notifications": "No notifications",
+  "This computer": "This computer",
+  "Memory": "Memory",
+  "Routines": "Routines"
 }

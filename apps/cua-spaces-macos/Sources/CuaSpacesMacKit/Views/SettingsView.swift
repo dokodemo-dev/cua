@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
 // Copyright (c) 2026 Cua AI, Inc.
 
+import CuaLocalization
 import CuaSDK
 import CuaSpacesFFI
 import SwiftUI
@@ -11,12 +12,22 @@ import SwiftUI
 /// `AppModel.press` / `choose`, and for Storage in `StorageModel`.
 struct SettingsView: View {
     @Bindable var model: AppModel
+    @State private var languageError: String?
 
     var body: some View {
         let storage = model.storage.section
         let sections = model.settingsPageWithStorage.sections
         ScrollViewReader { proxy in
             Form {
+                Section {
+                    LanguagePicker(preference: Binding(
+                        get: { model.languagePreference },
+                        set: { value in
+                            do { try model.setDisplayLanguage(value); languageError = nil }
+                            catch { languageError = error.localizedDescription }
+                        }))
+                    if let languageError { Text(languageError).foregroundStyle(.red) }
+                }
                 ForEach(sections, id: \.id) { section in
                     Section {
                         ForEach(section.rows, id: \.id) { row($0, in: section.id) }
@@ -25,13 +36,13 @@ struct SettingsView: View {
                         }
                     } header: {
                         HStack {
-                            Text(section.title)
+                            Text(model.displayText(section.title))
                             Spacer()
                             if let button = section.button {
-                                Button(button) { Task { await headerButton(section.id) } }
+                                Button(model.displayText(button)) { Task { await headerButton(section.id) } }
                                     .controlSize(.small)
                                     .disabled(!section.buttonEnabled)
-                                    .help(section.buttonHelp ?? "")
+                                    .help(model.displayText(section.buttonHelp ?? ""))
                             }
                         }
                     }
@@ -108,53 +119,70 @@ struct SettingsView: View {
                         Text(value).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                     if let button = r.button {
-                        Button(button) { press(r, in: section) }
+                        Button(model.displayText(button)) {
+                            press(r, in: section)
+                        }
                             .disabled(!r.enabled)
                     }
                 }
             } label: {
-                Text(r.label).lineLimit(1)
+                Text(model.displayText(r.label)).lineLimit(1)
             }
             .opacity(r.enabled || r.button != nil ? 1 : 0.5)
-            .help(r.help ?? "")
+            .help(model.displayText(r.help ?? ""))
         case .choice:
-            Picker(r.label, selection: Binding(
+            Picker(model.displayText(r.label), selection: Binding(
                 get: { r.options.first(where: \.active)?.id ?? "" },
                 set: { id in choose(r, id, in: section) })) {
-                ForEach(r.options, id: \.id) { Text($0.label).tag($0.id) }
+                ForEach(r.options, id: \.id) { Text(model.displayText($0.label)).tag($0.id) }
             }
             .pickerStyle(.segmented)
             .disabled(!r.enabled)
-            .help(r.help ?? "")
+            .help(model.displayText(r.help ?? ""))
         case .toggle:
-            Toggle(r.label, isOn: Binding(
+            Toggle(model.displayText(r.label), isOn: Binding(
                 get: { r.options.first(where: { $0.id == "on" })?.active ?? false },
                 set: { choose(r, $0 ? "on" : "off", in: section) }))
                 .disabled(!r.enabled)
-                .help(r.help ?? "")
+                .help(model.displayText(r.help ?? ""))
                 .accessibilityIdentifier("settings-\(r.id)")
         case .field:
-            TextField(r.label, text: Binding(get: { r.value ?? "" }, set: { model.storage.edit(r.id, $0) }),
-                      prompt: r.placeholder.map { Text($0) })
+            TextField(
+                model.displayText(r.label),
+                text: Binding(get: { r.value ?? "" }, set: { model.storage.edit(r.id, $0) }),
+                prompt: r.placeholder.map { Text(model.displayText($0)) }
+            )
                 .disabled(!r.enabled)
                 .accessibilityIdentifier("settings-\(r.id)")
         case .secret:
-            SecureField(r.label, text: Binding(get: { r.value ?? "" }, set: { model.storage.edit(r.id, $0) }),
-                        prompt: r.placeholder.map { Text($0) })
+            SecureField(
+                model.displayText(r.label),
+                text: Binding(get: { r.value ?? "" }, set: { model.storage.edit(r.id, $0) }),
+                prompt: r.placeholder.map { Text(model.displayText($0)) }
+            )
                 .disabled(!r.enabled)
                 .accessibilityIdentifier("settings-\(r.id)")
         case .prompt:
-            PromptBox(label: r.label, text: r.value ?? "", copyLabel: r.button ?? "Copy")
+            PromptBox(
+                label: model.displayText(r.label),
+                text: r.value ?? "",
+                copyLabel: model.displayText(r.button ?? "Copy")
+            )
         case .link:
-            Button(r.label) { press(r, in: section) }
+            Button(model.displayText(r.label)) { press(r, in: section) }
                 .buttonStyle(.link)
                 .disabled(!r.enabled)
                 .accessibilityIdentifier("settings-\(r.id)")
         case .note:
             HStack(spacing: 4) {
-                Text(r.label).font(.callout).foregroundStyle(.secondary).lineLimit(1).help(r.label)
+                Text(model.displayText(r.label))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .help(model.displayText(r.label))
                 if let label = r.linkLabel, let url = r.linkUrl.flatMap(URL.init(string:)) {
-                    Link(label, destination: url).font(.callout)
+                    Link(model.displayText(label), destination: url)
+                        .font(.callout)
                 }
             }
         case .error:

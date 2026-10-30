@@ -27,6 +27,7 @@ import { toast, toastError } from "@/components/ui/toast";
 import { filterCommands, type PaletteCommand } from "@/lib/commands";
 import { machineName, osLabel, paletteKeywords, realSpaces, spaceState } from "@/lib/spaces";
 import { bindingFor } from "@/lib/keybindings";
+import { useI18n } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useNewSpace } from "@/hooks/use-new-space";
@@ -57,6 +58,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const { data: machines = [] } = useMachines();
   const newSpace = useNewSpace();
   const { data: keyvault, lockItems } = useKeyvault();
+  const { t } = useI18n();
   const { data: session, signIn, signOut } = useSession();
   const { preference, resolved, setPreference } = useTheme();
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
@@ -74,8 +76,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   const commands: Command[] = [
     {
       id: "space:new",
-      group: "Actions",
-      label: "New Space",
+      group: t("Actions"),
+      label: t("New Space"),
       keywords: "create add",
       icon: icon(PlusIcon),
       run: () => {
@@ -85,60 +87,76 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     },
     {
       id: "theme:toggle",
-      group: "Actions",
-      label: `Switch to ${other} appearance`,
+      group: t("Actions"),
+      label: t("Switch to {appearance} appearance", { appearance: t(other === "dark" ? "dark" : "light") }),
       keywords: "theme toggle dark light mode",
       shortcut: bindingFor("theme.cycle"),
       icon: icon(resolved === "dark" ? SunIcon : MoonIcon),
       run: () => setPreference(other),
     },
     ...(preference !== "system"
-      ? [{ id: "theme:system", group: "Actions", label: "Match system appearance", keywords: "theme auto", icon: icon(MonitorIcon), run: () => setPreference("system") }]
+      ? [{ id: "theme:system", group: t("Actions"), label: t("Match system appearance"), keywords: "theme auto", icon: icon(MonitorIcon), run: () => setPreference("system") }]
       : []),
     ...(!vaultLocked && unattended.length > 0
       ? [
           {
             id: "keyvault:lock",
-            group: "Actions",
-            label: "Lock Keyvault",
-            hint: "Every login asks before use",
+            group: t("Actions"),
+            label: t("Lock Keyvault"),
+            hint: t("Every login asks before use"),
             keywords: "secure ask",
             icon: icon(LockIcon),
             run: () =>
               void lockItems(unattended)
-                .then(() => toast("Keyvault locked", { description: "Every login now asks before each use." }))
-                .catch(toastError("Couldn't lock Keyvault")),
+                .then(() =>
+                  toast(t("Keyvault locked"), {
+                    description: t("Every login now asks before each use."),
+                  }),
+                )
+                .catch(toastError(t("Couldn't lock Keyvault"))),
           },
         ]
       : []),
     session?.signedIn
-      ? { id: "session:signOut", group: "Actions", label: "Sign out", hint: session.identity ?? undefined, keywords: "account log out", icon: icon(LogOutIcon), run: () => void signOut().catch(toastError("Couldn't sign out")) }
+      ? {
+          id: "session:signOut",
+          group: t("Actions"),
+          label: t("Sign out"),
+          hint: session.identity ?? undefined,
+          keywords: "account log out",
+          icon: icon(LogOutIcon),
+          run: () => void signOut().catch(toastError(t("Couldn't sign out"))),
+        }
       : {
           id: "session:signIn",
-          group: "Actions",
-          label: "Sign in",
+          group: t("Actions"),
+          label: t("Sign in"),
           keywords: "account log in cloud",
           icon: icon(LogInIcon),
           run: () =>
             void signIn()
-              .then(() => toast("Sign-in opened in your browser", { description: "Finish there, then come back." }))
-              .catch(toastError("Couldn't start sign-in")),
+              .then(() =>
+                toast(t("Sign-in opened in your browser"), {
+                  description: t("Finish there, then come back."),
+                }),
+              )
+              .catch(toastError(t("Couldn't start sign-in"))),
         },
-    { id: "sidebar", group: "Actions", label: "Show or hide sidebar", keywords: "toggle", shortcut: bindingFor("sidebar.toggle"), icon: icon(PanelLeftIcon), run: toggleSidebar },
+    { id: "sidebar", group: t("Actions"), label: t("Show or hide sidebar"), keywords: "toggle", shortcut: bindingFor("sidebar.toggle"), icon: icon(PanelLeftIcon), run: toggleSidebar },
     ...navItems.map((n) => ({
       id: `nav:${n.to}`,
-      group: "Go to",
+      group: t("Go to"),
       label: n.label,
       keywords: "page",
       shortcut: n.command ? bindingFor(n.command) : undefined,
       icon: icon(n.icon),
       run: () => void navigate({ to: n.to }),
     })),
-    { id: "nav:onboarding", group: "Go to", label: "Onboarding", keywords: "welcome setup", icon: icon(SparklesIcon), run: () => void navigate({ to: "/onboarding" }) },
+    { id: "nav:onboarding", group: t("Go to"), label: t("Onboarding"), keywords: "welcome setup", icon: icon(SparklesIcon), run: () => void navigate({ to: "/onboarding" }) },
     {
       id: "nav:checklist",
-      group: "Go to",
-      label: "Getting started",
+      group: t("Go to"),
+      label: t("Getting started"),
       keywords: "checklist steps tour help first",
       icon: icon(ListChecksIcon),
       run: () => {
@@ -202,8 +220,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
             setActive(0);
           }}
           onKeyDown={onKeyDown}
-          placeholder="Search for a Space or command"
-          aria-label="Search for a Space or command"
+          placeholder={t("Search for a Space or command")}
+          aria-label={t("Search for a Space or command")}
           role="combobox"
           aria-expanded="true"
           aria-controls="palette-list"
@@ -212,7 +230,11 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         />
       </div>
       <div id="palette-list" role="listbox" className="flex-1 overflow-y-auto p-1.5">
-        {results.length === 0 ? <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">No matches</p> : null}
+        {results.length === 0 ? (
+          <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">
+            {t("No matches")}
+          </p>
+        ) : null}
         {results.map((cmd, i) => {
           const header = cmd.group !== lastGroup ? cmd.group : null;
           lastGroup = cmd.group;

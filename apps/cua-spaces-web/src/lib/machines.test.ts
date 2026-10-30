@@ -4,7 +4,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { Machine } from "@/bridge";
+import { translate } from "./i18n-core";
 import { connectionLabel, machineOs, machinesSummary, machineSubtitle, presenceLabel, presenceWord, reachable, selectedMachine, spaceCount, spacesLabel } from "./machines";
+
+/** The sentences the Machines page builds are translated through this. */
+const ja = (key: string, args?: Record<string, string>) => translate("ja", key, args);
 
 const NOW = Date.parse("2026-10-03T12:00:00Z");
 
@@ -71,10 +75,22 @@ describe("machines", () => {
   });
 
   it("counts Spaces and keeps a valid selection", () => {
-    expect([0, 1, 3].map(spaceCount)).toEqual(["No Spaces", "1 Space", "3 Spaces"]);
+    expect([0, 1, 3].map((n) => spaceCount(n))).toEqual(["No Spaces", "1 Space", "3 Spaces"]);
     const list = [machine({ id: "a" }), machine({ id: "b" })];
     expect(selectedMachine(list, "b")?.id).toBe("b");
     expect(selectedMachine(list, "gone")?.id).toBe("a");
     expect(selectedMachine([], null)).toBeUndefined();
+  });
+
+  it("speaks the chosen language when it is handed a translator", () => {
+    expect(presenceWord(machine({}), ja)).toBe("オンライン");
+    expect(presenceWord(machine({ online: false }), ja)).toBe("オフライン");
+    expect(spacesLabel(machine({}), 3, ja)).toBe("3 Space");
+    expect(machinesSummary(1, 1, ja)).toBe("1台のコンピューター、1台オンライン");
+    expect(machinesSummary(3, 2, ja)).toBe("3台のコンピューター、2台オンライン");
+    expect(presenceLabel(machine({ online: false, lastSeen: NOW / 1000 - 120 }), NOW, ja)).toMatch(
+      /^オフライン（最終確認: /,
+    );
+    expect(connectionLabel(machine({}), ja)).toBe("Cuaリレー");
   });
 });

@@ -9,6 +9,7 @@ import type { AgentTimeline, TranscriptItem } from "@/bridge";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 /**
  * A run's conversation, after T3 Code's MessagesTimeline: a virtualized
@@ -39,6 +40,7 @@ export function Timeline({
   /** Below the last row: what the run is doing now. */
   footer?: React.ReactNode;
 }) {
+  const { t } = useI18n();
   const listRef = useRef<LegendListRef>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
@@ -149,7 +151,7 @@ export function Timeline({
         className="h-full overscroll-y-contain [overflow-anchor:none]"
         ListHeaderComponent={<div className="h-6" />}
         ListFooterComponent={listFooter}
-        aria-label="Run timeline"
+        aria-label={t("Run timeline")}
         tabIndex={0}
       />
       {!following ? (

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogPopup, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
  * decides every word and request (`cloudConnect.*`); this draws it.
  */
 export function ConnectCloudDialog() {
+  const { t } = useI18n();
   const connect = useConnectCloud();
   const v = connect.view;
   const send = (action: CloudConnectAction) => void connect.send(action);
@@ -52,7 +54,7 @@ export function ConnectCloudDialog() {
                 {v.title}
               </DialogTitle>
 
-              <div role="radiogroup" aria-label="Clouds" className="divide-y overflow-hidden rounded-xl border bg-card shadow-xs">
+              <div role="radiogroup" aria-label={t("Clouds")} className="divide-y overflow-hidden rounded-xl border bg-card shadow-xs">
                 {v.rows.map((r) => (
                   <button
                     key={r.id}
@@ -80,7 +82,12 @@ export function ConnectCloudDialog() {
                       </span>
                     </span>
                     {r.found ? (
-                      <span role="img" aria-label="Sign-in found" title="Sign-in found" data-cloud-found="">
+                      <span
+                        role="img"
+                        aria-label={t("Sign-in found")}
+                        title={t("Sign-in found")}
+                        data-cloud-found=""
+                      >
                         <CheckIcon className="size-4 text-success" />
                       </span>
                     ) : null}
@@ -102,7 +109,11 @@ export function ConnectCloudDialog() {
               ) : null}
 
               {v.touches.length ? (
-                <div aria-label="What Cua will touch" data-cloud-touches="" className="space-y-1.5 px-1 text-xs text-muted-foreground">
+                <div
+                  aria-label={t("What Cua will touch")}
+                  data-cloud-touches=""
+                  className="space-y-1.5 px-1 text-xs text-muted-foreground"
+                >
                   {v.touches.map((line) => (
                     <p key={line}>{line}</p>
                   ))}
@@ -110,7 +121,7 @@ export function ConnectCloudDialog() {
               ) : null}
 
               {v.checks.length ? (
-                <ul aria-label="Checks" className="space-y-1 px-1">
+                <ul aria-label={t("Checks")} className="space-y-1 px-1">
                   {v.checks.map((c) => (
                     <li key={c.text} data-cloud-check={c.ok ? "ok" : "failed"} className="flex items-center gap-2 text-[13px]">
                       <span className={cn("size-1.5 shrink-0 rounded-full", c.ok ? "bg-success" : "bg-destructive")} aria-hidden="true" />

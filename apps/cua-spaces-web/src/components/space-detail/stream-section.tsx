@@ -7,6 +7,7 @@ import type { SpaceOs, StreamRow, StreamSection as StreamSectionView } from "@/b
 import { OsIcon } from "@/components/os-icon";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 /** The core's OS mark ids (`os-ubuntu`, `os-macos`, ..., `computer` for an
  * unknown OS) on this app's marks. */
@@ -39,6 +40,7 @@ export function StreamSection({
   /** The host can't list windows: no loading or empty line. */
   hideStatus?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <section data-section="stream" className="mb-7">
       <div className="mb-2 flex items-center justify-between gap-3 px-1">
@@ -49,8 +51,8 @@ export function StreamSection({
             data-stream-filter
             value={query}
             onChange={(e) => onQuery(e.target.value)}
-            placeholder="Filter windows"
-            aria-label="Filter windows"
+            placeholder={t("Filter windows")}
+            aria-label={t("Filter windows")}
             className="min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
           />
         </label>

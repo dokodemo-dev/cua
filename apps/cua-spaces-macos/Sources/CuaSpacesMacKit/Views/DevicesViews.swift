@@ -13,19 +13,19 @@ struct SettingsScene: View {
     var body: some View {
         TabView(selection: $model.settingsTab) {
             SettingsView(model: model)
-                .tabItem { Label("General", systemImage: "gearshape") }
+                .tabItem { Label(model.displayText("General"), systemImage: "gearshape") }
                 .tag(SettingsTab.general)
             AgentKeysSettingsView(keys: model.agentKeys)
-                .tabItem { Label("Agents", systemImage: "key") }
+                .tabItem { Label(model.displayText("Agents"), systemImage: "key") }
                 .tag(SettingsTab.agents)
             DevicesSettingsView(devices: model.devices)
-                .tabItem { Label(model.devices.view.labels.title, systemImage: "laptopcomputer.and.iphone") }
+                .tabItem { Label(model.displayText(model.devices.view.labels.title), systemImage: "laptopcomputer.and.iphone") }
                 .tag(SettingsTab.devices)
             ExperimentsSettingsView(model: model)
-                .tabItem { Label(model.experimentsPage.title, systemImage: "flask") }
+                .tabItem { Label(model.displayText(model.experimentsPage.title), systemImage: "flask") }
                 .tag(SettingsTab.experiments)
             AboutSettingsView(updates: model.updates)
-                .tabItem { Label("About", systemImage: "info.circle") }
+                .tabItem { Label(model.displayText("About"), systemImage: "info.circle") }
                 .tag(SettingsTab.about)
         }
     }

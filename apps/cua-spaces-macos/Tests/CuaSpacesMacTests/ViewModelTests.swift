@@ -138,12 +138,17 @@ struct ViewModelTests {
                    agents: AgentSetupRunning? = nil, billing: BillingRunning? = nil,
                    loginItem: LoginItemControlling? = nil, telemetry: TelemetryRunning = FixtureTelemetry()) -> AppModel {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cua-mac-tests-\(UUID().uuidString)")
-        return AppModel(backend: backend,
+        let model = AppModel(backend: backend,
                         keyvault: KeyvaultModel(client: kv, clock: { fixtureNow }),
                         onboarding: OnboardingModel(statePath: dir.appendingPathComponent("onboarding.json").path),
                         settingsPath: dir.appendingPathComponent("settings.json").path,
                         host: host, account: account, telemetry: telemetry, agentSetup: agents,
-                        billing: billing, loginItem: loginItem)
+                        billing: billing, loginItem: loginItem,
+                        // Snapshots and label assertions must not follow the
+                        // developer's system language.
+                        languageFileURL: dir.appendingPathComponent("ui-language.json"))
+        model.languagePreference = "en"
+        return model
     }
 
     @Test func liveKeyvaultSharingShowsInTheNotchAndTheMenu() async throws {

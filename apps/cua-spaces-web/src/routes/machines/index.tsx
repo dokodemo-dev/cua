@@ -32,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toast";
 import { useNewSpace } from "@/hooks/use-new-space";
+import { useI18n } from "@/lib/i18n";
 import { machineOs, selectedMachine } from "@/lib/machines";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +62,9 @@ const HEALTH_EVERY_MS = 60_000;
  * actions (open, start, stop, teleport, drop files) stay on the Space.
  */
 function MachinesPage() {
+  const { t } = useI18n();
+  // The core sends the words; the catalog translates those it has.
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   const { data: machines = [], isLoading, error, setupGuide, view, checkHealth } = useMachines();
   // Each machine's issues come from its own daemon: asked on opening the
   // page and every minute while it stays open.
@@ -98,7 +102,13 @@ function MachinesPage() {
     <Page className="max-w-6xl">
       <PageHeader
         title="Computers"
-        description={isLoading ? "Loading computers…" : view?.machines.length ? view.summary : "Computers that can run your Spaces."}
+        description={
+          isLoading
+            ? t("Loading computers…")
+            : view?.machines.length
+              ? tx(view.summary)
+              : t("Computers that can run your Spaces.")
+        }
         actions={
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={() => setJoining(true)} data-join-with-code-open>
@@ -160,6 +170,8 @@ function MachineList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useI18n();
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   const { remove } = useMachines();
   const [openOld, setOpenOld] = useState(false);
   const [removingOld, setRemovingOld] = useState(false);
@@ -208,7 +220,7 @@ function MachineList({
                     className="flex flex-1 cursor-default items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent/60"
                   >
                     <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
-                    {g.title}
+                    {tx(g.title)}
                   </button>
                   {g.removeAll ? (
                     <button
@@ -217,12 +229,14 @@ function MachineList({
                       className="shrink-0 cursor-default px-1 text-xs text-muted-foreground underline decoration-border underline-offset-2 hover:text-foreground"
                       data-machines-remove-old
                     >
-                      {g.removeAll.label}
+                      {tx(g.removeAll.label)}
                     </button>
                   ) : null}
                 </div>
               ) : (
-                <div className="px-2 pt-3.5 pb-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">{g.title}</div>
+                <div className="px-2 pt-3.5 pb-1 text-[11px] font-semibold tracking-[0.02em] text-muted-foreground">
+                  {tx(g.title)}
+                </div>
               )}
               {visible.map((m) => (
                 <MachineRow
@@ -329,6 +343,8 @@ function MachineRow({
 /* ---- A machine's page --------------------------------------------------------------- */
 
 function MachineDetail({ machine: m, row, onRemoved }: { machine: MachinesViewMachine; row: Machine | undefined; onRemoved: () => void }) {
+  const { t: tr } = useI18n();
+  const tx = (text: string | null | undefined) => (text ? tr(text) : text);
   const { data: session } = useSession();
   const host = useThisMachine(session?.identity ?? null);
   const { remove } = useMachines();
@@ -345,7 +361,7 @@ function MachineDetail({ machine: m, row, onRemoved }: { machine: MachinesViewMa
       try {
         for (const a of t.actions) await host.run(a);
       } catch (e) {
-        fail(`Couldn't change ${t.label}`)(e);
+        fail(tr("Couldn't change {name}", { name: tx(t.label) ?? "" }))(e);
       } finally {
         setBusy(false);
       }
@@ -417,7 +433,7 @@ function MachineDetail({ machine: m, row, onRemoved }: { machine: MachinesViewMa
           <div key={t.id} className={cn("flex items-center justify-between gap-5 px-4 py-3.5", i > 0 && "border-t")} data-machine-toggle={t.id}>
             <div className={cn(dim(t) && "opacity-50")}>
               <div className="text-[13px] font-medium" id={`toggle-${t.id}`}>
-                {t.label}
+                {tx(t.label)}
               </div>
               <div className="mt-px text-xs text-muted-foreground">{t.help}</div>
             </div>
@@ -453,7 +469,11 @@ function MachineDetail({ machine: m, row, onRemoved }: { machine: MachinesViewMa
             className={cn("flex items-center gap-2.5 px-4 py-2.5 text-[13px] outline-none hover:bg-accent/50 focus-visible:bg-accent/60", i > 0 && "border-t")}
           >
             <span className="truncate font-mono text-xs">{s.name}</span>
-            {s.label ? <span className="shrink-0 rounded bg-muted px-1.5 text-2xs text-muted-foreground">{s.label}</span> : null}
+            {s.label ? (
+              <span className="shrink-0 rounded bg-muted px-1.5 text-2xs text-muted-foreground">
+                {tx(s.label)}
+              </span>
+            ) : null}
             {s.os ? (
               <>
                 <span className="text-muted-foreground/50">·</span>
@@ -489,7 +509,7 @@ function MachineDetail({ machine: m, row, onRemoved }: { machine: MachinesViewMa
             <dl className="overflow-hidden rounded-xl border bg-card">
               {m.details.map((f, i) => (
                 <div key={f.label} className={cn("grid grid-cols-[140px_1fr] px-4 py-2.5 text-[13px]", i > 0 && "border-t")}>
-                  <dt className="text-muted-foreground">{f.label}</dt>
+                  <dt className="text-muted-foreground">{tx(f.label)}</dt>
                   <dd className="select-text">{f.value}</dd>
                 </div>
               ))}
@@ -537,6 +557,8 @@ function MachineDetail({ machine: m, row, onRemoved }: { machine: MachinesViewMa
  * `hidePermissions`: This Mac lists the permissions it needs already.
  */
 function MachineIssues({ machine: m, hidePermissions, onFail }: { machine: MachinesViewMachine; hidePermissions: boolean; onFail: (what: string) => (e: unknown) => void }) {
+  const { t } = useI18n();
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   const { data: session } = useSession();
   const host = useThisMachine(session?.identity ?? null);
   const issues = (m.issues ?? []).filter((i) => !(hidePermissions && i.id.startsWith("machine.permissions.")));
@@ -562,10 +584,10 @@ function MachineIssues({ machine: m, hidePermissions, onFail }: { machine: Machi
             ) : (
               <TriangleAlertIcon aria-label="Warning" className="size-3.5 shrink-0 text-warning" />
             )}
-            <span className="min-w-0 flex-1 text-[13px]">{i.text}</span>
+            <span className="min-w-0 flex-1 text-[13px]">{tx(i.text)}</span>
             {i.action ? (
               <Button size="sm" variant="outline" className="shrink-0" disabled={host.busy || (i.action.appUpdate && update.installing)} onClick={() => act(i)} data-machine-issue-action={i.id}>
-                {i.action.label}
+                {tx(i.action.label)}
               </Button>
             ) : null}
           </div>
@@ -592,6 +614,8 @@ function NewSpaceHere({ machine: m }: { machine: MachinesViewMachine }) {
 }
 
 function RenameDialog({ open, machine: m, onClose }: { open: boolean; machine: MachinesViewMachine; onClose: () => void }) {
+  const { t } = useI18n();
+  const tx = (text: string | null | undefined) => (text ? t(text) : text);
   const { rename, refresh } = useMachines();
   const devices = useDevices();
   const [name, setName] = useState(m.name);
@@ -619,8 +643,8 @@ function RenameDialog({ open, machine: m, onClose }: { open: boolean; machine: M
           }}
         >
           <div className="px-5 pt-5 pb-4">
-            <DialogTitle className="text-[15px] font-semibold">{r.title}</DialogTitle>
-            <Input className="mt-3" aria-label={r.title} value={name} autoFocus maxLength={64} onChange={(e) => setName(e.currentTarget.value)} data-machine-rename-input />
+            <DialogTitle className="text-[15px] font-semibold">{tx(r.title)}</DialogTitle>
+            <Input className="mt-3" aria-label={tx(r.title) ?? undefined} value={name} autoFocus maxLength={64} onChange={(e) => setName(e.currentTarget.value)} data-machine-rename-input />
           </div>
           <div className="flex justify-end gap-2 border-t bg-muted/60 px-5 py-3">
             <Button type="button" variant="outline" onClick={onClose}>
