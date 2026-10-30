@@ -1,5 +1,10 @@
 # Node / JS
 node_modules/
+
+# Formatted by oxfmt instead (examples/cua-bots-service-go/ui/.oxfmtrc.json)
+examples/cua-bots-service-go/ui/
+examples/cua-bots-service-go/internal/api/ui/app.js
+examples/cua-bots-service-go/ui/aube-lock.yaml
 dist/
 build/
 out/
