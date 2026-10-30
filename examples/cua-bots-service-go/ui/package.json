@@ -1,0 +1,19 @@
+{
+  "name": "cua-bots-ui",
+  "private": true,
+  "description": "Browser UI for cua-bots-service, bundled into internal/api/ui/app.js",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc -p tsconfig.json && node build.mjs --check && oxlint && oxfmt --check .",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "oxlint",
+    "format": "oxfmt ."
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "oxfmt": "^0.74.0",
+    "oxlint": "^1.89.0",
+    "typescript": "5"
+  }
+}

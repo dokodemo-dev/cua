@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Cua Bots</title>
+    <link rel="stylesheet" href="/ui/app.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="sidebar" id="sidebar" aria-label="Bots">
+        <div class="sidebarTop">
+          <button class="iconButton" id="openSearch" type="button" aria-label="検索" title="検索 (⌘K)"></button>
+          <button class="iconButton solid" id="openNewBot" type="button" aria-label="新しい Bot" title="新しい Bot (⌘N)"></button>
+        </div>
+        <div class="quickAccess" id="quickAccess" hidden></div>
+        <div class="railSortRow">
+          <label class="railSortLabel" for="railSort">並び</label>
+          <select id="railSort" class="railSort" aria-label="Bot 一覧の並び順">
+            <option value="space">動かす場所</option>
+            <option value="name">名前順</option>
+            <option value="recent">最後に動いた順</option>
+          </select>
+        </div>
+        <nav class="botSections" id="botSections" aria-label="Bot 一覧"></nav>
+        <div class="sidebarFoot">
+          <button class="accountChip" id="accountChip" type="button" aria-haspopup="menu" aria-expanded="false">
+            <span class="accountFace" id="accountFace">—</span>
+            <span class="accountName" id="accountName">サインインしていません</span>
+            <span class="accountMore" aria-hidden="true"></span>
+          </button>
+          <div class="accountMenu" id="accountMenu" role="menu" hidden>
+            <button type="button" role="menuitem" data-action="settings">設定</button>
+            <button type="button" role="menuitem" data-action="session">接続情報</button>
+            <button type="button" role="menuitem" data-action="logout">サインアウト</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main" id="main">
+        <div class="statusBar">
+          <button class="iconButton onlyNarrow" id="openSidebar" type="button" aria-label="Bot 一覧を開く" aria-controls="sidebar"></button>
+          <button class="statusPill" id="statusPill" type="button" aria-expanded="false">
+            <span class="statusFace" id="statusFace"></span>
+            <span class="statusText">
+              <span class="statusName" id="statusName">Bot</span>
+              <span class="statusPresence" id="statusPresence"></span>
+            </span>
+          </button>
+        </div>
+
+        <div class="viewport" id="viewport">
+          <section class="thread" id="thread" aria-live="polite"></section>
+        </div>
+
+        <div class="composerWrap" id="composerWrap">
+          <form class="composer" id="composer" autocomplete="off">
+            <button class="composerPlus" id="composerPlus" type="button" aria-label="添付（未対応）" title="添付はまだできません" disabled></button>
+            <textarea
+              id="composerText"
+              rows="1"
+              placeholder="回答を入力するか、別の話題について話してください"
+              aria-label="メッセージ"
+            ></textarea>
+            <span class="composerHint" aria-hidden="true">⌘↵</span>
+            <button class="composerSend" id="send" type="submit" aria-label="送信" title="送信"></button>
+          </form>
+        </div>
+
+        <section class="gate" id="gate" hidden>
+          <div class="gateCard">
+            <h1>サインインしていません</h1>
+            <p>
+              このページは、ターミナルで発行したリンクから開くと自動でサインインします。
+              Mac で次を実行してください。
+            </p>
+            <code class="codeLine">cua-bots-open</code>
+            <p class="gateHint" id="gateHint" hidden></p>
+            <p class="muted">
+              リンクには有効期限があります。切れたら同じコマンドを再実行してください。
+            </p>
+            <p>うまくいかないときは、リンクの資格情報をここに貼ってください。</p>
+            <input id="gateCred" type="password" placeholder="資格情報" autocomplete="off" />
+            <button class="primary" id="gateSignIn" type="button">サインイン</button>
+          </div>
+        </section>
+      </main>
+
+      <aside class="panel" id="panel" aria-label="Bot の詳細" hidden>
+        <div class="panelHead">
+          <span class="panelFaceSlot" id="panelFace"></span>
+          <button class="iconButton small" id="panelClose" type="button" aria-label="詳細を閉じる"></button>
+        </div>
+        <h2 class="panelName" id="panelName">Bot</h2>
+        <div class="panelTabs" role="tablist" aria-label="Bot の情報">
+          <button class="panelTab" type="button" role="tab" data-tab="details" aria-selected="true">詳細</button>
+          <button class="panelTab" type="button" role="tab" data-tab="library" aria-selected="false">ライブラリ</button>
+          <button class="panelTab" type="button" role="tab" data-tab="computer" aria-selected="false">コンピューター</button>
+        </div>
+        <div class="panelBody" id="panelBody"></div>
+      </aside>
+    </div>
+
+    <dialog class="sheet searchSheet" id="searchDialog" aria-label="検索">
+      <div class="searchBar">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="searchInput" type="search" placeholder="検索" aria-label="検索" autocomplete="off" />
+        <button class="iconButton small" type="button" data-close aria-label="閉じる"></button>
+      </div>
+      <div class="searchResults" id="searchResults"></div>
+    </dialog>
+
+    <dialog class="sheet settingsSheet" id="settingsDialog" aria-label="設定">
+      <div class="settingsLayout">
+        <nav class="settingsNav" id="settingsNav" aria-label="設定の項目">
+          <button type="button" data-section="general">一般</button>
+          <button type="button" data-section="access">接続</button>
+          <button type="button" data-section="spaces">Space</button>
+          <button type="button" data-section="keys">API キー</button>
+          <button type="button" data-section="chat">会話</button>
+          <button type="button" data-section="screen">画面</button>
+        </nav>
+        <div class="settingsBody" id="settingsBody"></div>
+      </div>
+      <button class="iconButton small sheetClose" type="button" data-close aria-label="設定を閉じる"></button>
+    </dialog>
+
+    <dialog class="sheet newBotSheet" id="newBotDialog" aria-label="新しい Bot を作成">
+      <header class="newBotHead">
+        <h2>新しい Bot を作成</h2>
+        <p class="muted">仕事がはっきり分かれるときに、Bot を分けます。</p>
+      </header>
+      <div class="newBotPreview" id="newBotPreview"></div>
+      <input
+        id="newBotName"
+        type="text"
+        placeholder="Bot に名前を付ける"
+        aria-label="Bot の名前"
+        aria-describedby="newBotHint"
+        autocomplete="off"
+      />
+      <p class="fieldHint" id="newBotHint">
+        半角小文字の英数字と . _ - が使えます（63文字まで）。
+      </p>
+      <div class="shapeGrid" id="shapeGrid" role="group" aria-label="形"></div>
+      <div class="colorRow" id="colorRow" role="group" aria-label="色"></div>
+      <label class="field">
+        <span>動かす場所</span>
+        <select id="newBotSpace"></select>
+      </label>
+      <p class="formError" id="newBotError" role="alert" hidden></p>
+      <footer class="sheetFoot">
+        <button class="ghost" type="button" data-close>キャンセル</button>
+        <button class="primary" id="createBot" type="button" disabled>作成</button>
+      </footer>
+    </dialog>
+
+    <dialog class="sheet newBotSheet" id="avatarDialog" aria-label="見た目を変える">
+      <header class="newBotHead">
+        <h2>見た目を変える</h2>
+        <p class="muted">色と形は、あとからでも変えられます。</p>
+      </header>
+      <div class="newBotPreview" id="avatarPreview"></div>
+      <div class="shapeGrid" id="avatarShapes" role="group" aria-label="形"></div>
+      <div class="colorRow" id="avatarColors" role="group" aria-label="色"></div>
+      <p class="formError" id="avatarError" role="alert" hidden></p>
+      <footer class="sheetFoot">
+        <button class="ghost" type="button" data-close>キャンセル</button>
+        <button class="primary" id="saveAvatar" type="button">保存</button>
+      </footer>
+    </dialog>
+
+    <dialog class="sheet" id="commandDialog" aria-label="接続コマンド">
+      <h2>接続コマンド</h2>
+      <p class="muted">
+        Space の中でログインや確認をするときのコマンドです。選択されたままなので、
+        コピーがうまくいかない環境では ⌘C でどうぞ。
+      </p>
+      <input id="commandText" class="codeLine" type="text" readonly aria-label="接続コマンド" />
+      <footer class="sheetFoot">
+        <button class="ghost" type="button" data-close>閉じる</button>
+        <button class="primary" id="commandCopy" type="button">コピー</button>
+      </footer>
+    </dialog>
+
+    <dialog class="sheet routineSheet" id="routineDialog" aria-label="ルーティンを追加">
+      <h2>ルーティンを追加</h2>
+      <p class="muted">
+        決めた時刻になると、この Bot が自分から仕事をします。結果はチャットにも残ります。
+      </p>
+      <div class="routineForm">
+        <label class="field">
+          <span>名前</span>
+          <input id="rtTitle" type="text" placeholder="例: 朝のまとめ" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>頼むこと</span>
+          <textarea id="rtPrompt" rows="3" placeholder="例: 昨夜の変更を要約して"></textarea>
+        </label>
+        <div class="fieldRow">
+          <label class="field">
+            <span>間隔</span>
+            <select id="rtEvery">
+              <option value="900">15分ごと</option>
+              <option value="3600">1時間ごと</option>
+              <option value="21600">6時間ごと</option>
+              <option value="86400" selected>1日ごと</option>
+              <option value="604800">1週間ごと</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>最初の実行</span>
+            <select id="rtDelay">
+              <option value="0">すぐ</option>
+              <option value="300">5分後</option>
+              <option value="3600" selected>1時間後</option>
+              <option value="43200">12時間後</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <p class="formError" id="routineError" role="alert" hidden></p>
+      <footer class="sheetFoot">
+        <button class="ghost" type="button" data-close>キャンセル</button>
+        <button class="primary" id="rtAdd" type="button">追加</button>
+      </footer>
+    </dialog>
+
+    <dialog class="sheet agentSheet" id="agentDialog" aria-label="エージェント設定">
+      <h2>エージェント設定</h2>
+      <p class="muted">この Bot のターンの開始方法です。変更は次のターンから効きます。</p>
+      <div class="presetRow" id="agentPresets" role="group" aria-label="プリセット"></div>
+      <div id="agentFields" class="agentFields">
+        <label class="field">
+          <span>ハーネス</span>
+          <select id="agentHarness"></select>
+        </label>
+        <label class="field">
+          <span>モデル</span>
+          <input id="agentModel" type="text" placeholder="Space の既定（例: gpt-6.1-sol）" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>ベース URL（任意）</span>
+          <input id="agentBase" type="text" placeholder="https://..." autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>通信形式（ベース URL を使うとき）</span>
+          <select id="agentWire">
+            <option value="">ハーネスの既定</option>
+            <option value="openai-chat">OpenAI Chat Completions</option>
+            <option value="openai-responses">OpenAI Responses</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Gemini</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>鍵の変数名（カンマ区切り）</span>
+          <input id="agentKeys" type="text" placeholder="OPENAI_API_KEY" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>追加ヘッダー（任意、カンマ区切り）</span>
+          <input
+            id="agentHeaders"
+            type="text"
+            placeholder="x-opencode-session=cua-bots"
+            autocomplete="off"
+          />
+        </label>
+        <label class="field">
+          <span>時間帯で切り替え（1 行 1 ルール: 曜日 時刻 プリセット）</span>
+          <textarea
+            id="agentSchedule"
+            rows="3"
+            placeholder="mon-fri 21:00-24:00 opencode"
+            spellcheck="false"
+          ></textarea>
+        </label>
+        <p class="panelNote muted">
+          ここに書いた順に判定し、最初に当てはまった行のプリセットで動きます。空なら上の設定を
+          1 日中使います。「オフピーク」を選ぶと、Ollama Cloud の割引時間だけ Ollama Cloud を、
+          それ以外（21:00〜翌 3:00）を OpenCode Go を使う 3 行が入ります。
+        </p>
+        <p class="panelNote muted">
+          鍵の値は「設定 → API キー」で保存します。ここには変数名だけを書きます。
+          追加ヘッダーは、ゲートウェイが要求する経路指定用のものです（鍵はここに書きません）。
+          Space のログインを使う場合は、その Space で一度だけ
+          <code>cua sb shell &lt;space&gt;</code> → <code>~/.cua/bin/pi</code> → <code>/login</code>
+          を実行してください。
+        </p>
+      </div>
+      <p class="formError" id="agentError" role="alert" hidden></p>
+      <footer class="sheetFoot">
+        <button class="ghost" type="button" data-close>キャンセル</button>
+        <button class="primary" id="agentSave" type="button">保存</button>
+      </footer>
+    </dialog>
+
+    <dialog class="sheet smallSheet" id="credentialDialog" aria-label="資格情報">
+      <h2>資格情報</h2>
+      <p class="muted">CLI やスクリプトで使う値です。この画面では不要です。</p>
+      <input id="credentialValue" type="text" readonly aria-label="資格情報" />
+      <p class="formError" id="credentialError" role="alert" hidden></p>
+      <footer class="sheetFoot">
+        <button class="ghost" type="button" data-close>閉じる</button>
+        <button class="primary" id="copyCredential" type="button">コピー</button>
+      </footer>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" popover="manual"></div>
+    <script type="module" src="/ui/app.js"></script>
+  </body>
+</html>
