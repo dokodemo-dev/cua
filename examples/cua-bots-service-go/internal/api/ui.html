@@ -1,0 +1,1355 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cua Bots</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; margin: 0; height: 100vh;
+         display: flex; flex-direction: column; background: #0f1115; color: #e6e8ee; }
+  header { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+           border-bottom: 1px solid #262a33; }
+  nav { display: flex; gap: 4px; }
+  nav button { background: transparent; color: #aab2c5; border: 0; padding: 6px 12px;
+               border-radius: 8px; cursor: pointer; }
+  nav button[aria-selected="true"] { background: #1d2330; color: #e6e8ee; }
+  header .spacer { flex: 1; }
+  select, input, textarea, button { font: inherit; }
+  select, input { padding: 6px 8px; border-radius: 8px; border: 1px solid #303644;
+                  background: #161a21; color: inherit; }
+  button.primary { background: #3b6df6; color: #fff; border: 0; padding: 7px 14px;
+                   border-radius: 8px; cursor: pointer; }
+  button.primary:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: #1d2330; border: 0; color: #e6e8ee; padding: 6px 12px;
+                 border-radius: 8px; cursor: pointer; font-size: 12px; }
+  main { flex: 1; overflow-y: auto; padding: 16px; }
+  section[hidden], footer[hidden], div[hidden] { display: none; }
+  .turn { max-width: 900px; margin-bottom: 14px; }
+  .prompt { font-weight: 600; margin-bottom: 4px; }
+  .out { white-space: pre-wrap; word-break: break-word; background: #161a21;
+         border: 1px solid #262a33; border-radius: 10px; padding: 10px 12px;
+         font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+         line-height: 1.5; max-height: 60vh; overflow: auto; }
+  .running { color: #f0b429; font-size: 12px; }
+  .failed { color: #ef5350; font-size: 12px; }
+  footer { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #262a33; }
+  textarea { flex: 1; resize: vertical; min-height: 44px; max-height: 200px; padding: 10px;
+             border-radius: 8px; border: 1px solid #303644; background: #161a21;
+             color: inherit; }
+  .hint { color: #8b93a7; font-size: 12px; line-height: 1.6; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #22262f; vertical-align: top; }
+  th { color: #8b93a7; font-weight: 600; }
+  td code { font-size: 12px; color: #b9c0d0; }
+  .empty { color: #8b93a7; padding: 16px 0; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #1d2330; }
+  .pill.paused { background: #3a2f14; color: #f0b429; }
+  .pill.ready { background: #143a24; color: #64d98b; }
+  .pill.failed { background: #3a1717; color: #ef5350; }
+  code { background: #161a21; padding: 1px 5px; border-radius: 5px; }
+  .card { border: 1px solid #262a33; border-radius: 12px; padding: 16px; max-width: 640px; }
+  .gate { max-width: 560px; margin: 40px auto; line-height: 1.7; }
+  .shell { flex: 1; display: flex; min-height: 0; }
+  aside.rail { width: 216px; border-right: 1px solid #262a33; display: flex;
+               flex-direction: column; padding: 10px 8px; gap: 2px; overflow-y: auto; }
+  aside.rail .railLabel { color: #8b93a7; font-size: 11px; letter-spacing: .08em;
+                          padding: 6px 8px; }
+  aside.rail button.bot { display: flex; align-items: center; gap: 8px; width: 100%;
+                          background: transparent; border: 0; color: #cfd6e4; padding: 6px 8px;
+                          border-radius: 9px; cursor: pointer; text-align: left; }
+  aside.rail button.bot:hover { background: #171b23; }
+  aside.rail button.bot[aria-current="true"] { background: #1d2330; color: #fff; }
+  aside.rail button.bot .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chatHead { display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+              border-bottom: 1px solid #262a33; }
+  .chatHead .who { display: flex; flex-direction: column; line-height: 1.3; }
+  .chatHead .who b { font-size: 14px; }
+  .chatHead .presence { color: #8b93a7; font-size: 12px; }
+  .thread { max-width: 760px; margin: 0 auto; width: 100%; }
+  .msg { display: flex; margin: 4px 0; }
+  .msg.user { justify-content: flex-end; }
+  .msg .bubble { max-width: 78%; padding: 9px 13px; border-radius: 16px;
+                 white-space: pre-wrap; word-break: break-word; font-size: 13.5px;
+                 line-height: 1.55; }
+  .msg.bot .bubble { background: #161a21; border: 1px solid #262a33;
+                     font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .msg.notice { justify-content: center; }
+  .msg.notice .bubble { background: transparent; color: #8b93a7; font-size: 12px; padding: 2px 8px; }
+  .typing { display: flex; align-items: center; gap: 8px; color: #8b93a7; font-size: 12px;
+            padding: 6px 2px; }
+  .think { max-width: 78%; margin: 2px 0 2px 2px; color: #7b8496; font-size: 12px; }
+  .think summary { cursor: pointer; color: #6f7787; list-style: none; }
+  .think summary::-webkit-details-marker { display: none; }
+  .think summary::before { content: "▸ "; }
+  .think[open] summary::before { content: "▾ "; }
+  .think .body { white-space: pre-wrap; padding: 4px 0 0 12px;
+                 border-left: 2px solid #262a33; margin-left: 2px; line-height: 1.5; }
+  .spin { display: inline-block; width: 1ch; color: #7ea2ff; }
+  .typing .label { color: #cfd6e4; }
+  .typing .elapsed { color: #6f7787; font-variant-numeric: tabular-nums; }
+  /* The bot list belongs to the conversation; the other tabs are full width. */
+  body:not([data-view="chat"]) aside.rail { display: none; }
+  .dots span { display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+               background: #8b93a7; margin-right: 3px; animation: pulse 1.1s infinite; }
+  .dots span:nth-child(2) { animation-delay: .18s; }
+  .dots span:nth-child(3) { animation-delay: .36s; }
+  @keyframes pulse { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chips button { background: transparent; border: 1px solid #303644; border-radius: 999px;
+                  color: #cfd6e4; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  .chips button:hover { border-color: #3b6df6; }
+  svg.avatar { display: block; }
+  svg.avatar.small { width: 34px; height: 34px; }
+  svg.avatar.row { width: 28px; height: 28px; }
+  svg.avatar.hero { width: 132px; height: 132px; }
+  td.face { width: 44px; }
+  .botname { display: flex; align-items: center; gap: 8px; }
+  .wizard-head { display: flex; align-items: center; gap: 16px; }
+  .wizard-head h3 { margin: 0 0 4px; }
+  .wizard-head p { margin: 0; }
+  .pick { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pick button { background: #161a21; border: 1px solid #303644; color: #cfd6e4;
+                 border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  .pick button[aria-pressed="true"] { border-color: #3b6df6; color: #fff; }
+  .swatch { width: 26px; height: 26px; border-radius: 50%; display: inline-block; }
+  .steps { color: #8b93a7; font-size: 12px; letter-spacing: .08em; }
+</style>
+</head>
+<body>
+<header>
+  <strong style="font-size:14px">Cua Bots</strong>
+  <nav>
+    <button data-view="chat" aria-selected="true">チャット</button>
+    <button data-view="bots">Bots</button>
+    <button data-view="routines">ルーティン</button>
+    <button data-view="settings">設定</button>
+  </nav>
+  <span class="spacer"></span>
+  <select id="bot" title="Bot" hidden></select>
+</header>
+
+<div class="shell">
+<aside class="rail" id="rail">
+  <div class="railLabel">Bots</div>
+</aside>
+<div class="pane">
+<main>
+  <div id="gate" hidden>
+    <div class="gate card">
+      <h3 style="margin:0 0 8px">サインインしていません</h3>
+      <p class="hint">このページは、ターミナルで発行したリンクから開くと自動でサインインします。
+        Mac で次を実行してください。</p>
+      <p><code>cua-bots-open</code></p>
+      <p class="hint">リンクには有効期限があります。切れたら同じコマンドを再実行してください。</p>
+      <p class="hint" id="gateHint" hidden></p>
+      <p class="hint">うまくいかないときは、リンクの資格情報をここに貼ってください。</p>
+      <p><input id="gateCred" type="password" placeholder="資格情報" style="width:100%"></p>
+      <p><button class="primary" id="gateSignIn">サインイン</button></p>
+    </div>
+  </div>
+
+  <section id="view-chat">
+    <div class="chatHead">
+      <span id="chatFace"></span>
+      <span class="who">
+        <b id="chatName">Bot</b>
+        <span class="presence" id="chatPresence">待機中</span>
+      </span>
+    </div>
+    <div id="log"></div>
+  </section>
+
+  <section id="view-bots" hidden>
+    <div class="card wizard" id="wizard" style="margin-bottom:18px;max-width:720px">
+      <div class="wizard-head">
+        <div id="wizardFace"></div>
+        <div>
+          <div class="steps" id="wizardSteps">1 / 3</div>
+          <h3 id="wizardTitle">なんと呼ぶ？</h3>
+          <p class="hint" id="wizardLead">名前を決めると、その名前から色が決まります。</p>
+        </div>
+      </div>
+      <div id="step1" style="margin-top:14px">
+        <p><input id="newBot" placeholder="例: gamma" style="width:260px"></p>
+      </div>
+      <div id="step2" hidden style="margin-top:14px">
+        <p class="hint" style="margin:0 0 6px">色</p>
+        <div class="pick" id="colorPicks"></div>
+        <p class="hint" style="margin:14px 0 6px">目</p>
+        <div class="pick" id="eyePicks"></div>
+        <p class="hint" style="margin:14px 0 6px">耳</p>
+        <div class="pick" id="earPicks"></div>
+      </div>
+      <div id="step3" hidden style="margin-top:14px">
+        <p class="hint" style="margin:0 0 6px">どこで動かす？</p>
+        <p><select id="spacePick" style="min-width:320px"></select></p>
+        <p id="newSpaceRow" hidden>
+          <input id="newSpace" placeholder="新しい Space の名前（空なら bot-&lt;名前&gt;）" style="width:320px">
+        </p>
+        <p class="hint" id="spaceNoteText"></p>
+      </div>
+      <p style="margin-top:16px">
+        <button class="ghost" id="wizBack" hidden>戻る</button>
+        <button class="primary" id="wizNext">次へ</button>
+        <button class="primary" id="createBot" hidden>つくる</button>
+      </p>
+      <div id="creating" hidden>
+        <p class="hint" id="creatingText"></p>
+        <p><button class="ghost" id="goChat">チャットへ</button></p>
+      </div>
+    </div>
+    <h3 style="margin:0 0 6px">Bot 一覧</h3>
+    <table>
+      <thead><tr><th>Bot</th><th>Space</th><th>状態</th><th></th></tr></thead>
+      <tbody id="botList"><tr><td colspan="5" class="empty">読み込み中…</td></tr></tbody>
+    </table>
+    <label class="hint" style="display:block;margin-top:14px">
+      <input type="checkbox" id="showArchived" style="width:auto"> アーカイブ済みも表示
+    </label>
+    <table id="archivedTable" hidden style="margin-top:8px">
+      <thead><tr><th>Bot</th><th>Space</th><th>状態</th><th></th></tr></thead>
+      <tbody id="archivedList"></tbody>
+    </table>
+    <div class="card" id="avatarEditor" hidden style="margin-top:14px">
+      <div class="wizard-head">
+        <div id="editorFace"></div>
+        <div>
+          <h3 style="margin:0 0 4px" id="editorTitle">見た目</h3>
+          <p class="hint">選ぶとすぐ反映されます。</p>
+        </div>
+      </div>
+      <div class="pick" id="editorPicks" style="margin-top:12px"></div>
+    </div>
+    <div id="issued" hidden style="margin-top:14px">
+      <p class="hint">この Bot の資格情報です（CLI やスクリプト用。画面では不要）。</p>
+      <p><input id="issuedValue" readonly style="width:460px;font-family:ui-monospace,monospace"></p>
+    </div>
+  </section>
+
+  <section id="view-routines" hidden>
+    <div class="card" style="margin-bottom:18px;max-width:720px">
+      <div class="wizard-head">
+        <div id="routineFace"></div>
+        <div>
+          <h3 style="margin:0 0 4px" id="routineTitle">この子のルーティン</h3>
+          <p class="hint">決めた時刻になると、この Bot が自分から仕事をします。結果はチャットにも残ります。</p>
+        </div>
+      </div>
+      <p style="margin-top:14px"><input id="rtTitle" placeholder="名前（例: 朝のまとめ）" style="width:260px"></p>
+      <p><textarea id="rtPrompt" placeholder="頼むこと（例: 昨夜の変更を要約して）"
+                   style="width:100%;min-height:70px"></textarea></p>
+      <p>
+        <label class="hint">間隔
+          <select id="rtEvery">
+            <option value="900">15分</option>
+            <option value="3600">1時間</option>
+            <option value="21600">6時間</option>
+            <option value="86400" selected>1日</option>
+            <option value="604800">1週間</option>
+          </select>
+        </label>
+        <label class="hint" style="margin-left:12px">最初の実行まで
+          <select id="rtDelay">
+            <option value="0">すぐ</option>
+            <option value="300">5分後</option>
+            <option value="3600" selected>1時間後</option>
+            <option value="43200">12時間後</option>
+          </select>
+        </label>
+        <button class="primary" id="rtAdd" style="margin-left:12px">追加</button>
+      </p>
+    </div>
+    <table>
+      <thead><tr><th>名前</th><th>間隔</th><th>次回</th><th>状態</th><th>頼むこと</th><th></th></tr></thead>
+      <tbody id="routines"><tr><td colspan="6" class="empty">読み込み中…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section id="view-settings" hidden>
+    <div class="card">
+      <h3 style="margin:0 0 6px">この画面へのアクセス</h3>
+      <p class="hint">
+        Cua のアカウントではありません。この VPS のサービスを、このブラウザから
+        操作してよいかを示す鍵です。<code>cua-bots-open</code> が作ったリンクを開くと
+        自動で入り、期限まで有効です。
+      </p>
+      <ul class="hint" id="sessionFacts" style="margin:8px 0 12px;padding-left:18px"></ul>
+      <p><button class="ghost" id="logout">このブラウザから鍵を消す</button></p>
+      <p class="hint">消したあとは <code>cua-bots-open</code> で入り直します。</p>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin:0 0 6px">会話の表示</h3>
+      <label class="hint" style="display:flex;gap:8px;align-items:flex-start">
+        <input type="checkbox" id="thinkingOpen" style="width:auto;margin-top:3px">
+        <span>
+          考えていることを最初から開いて表示する<br>
+          <span style="color:#6f7787">切ると「考えていること」は閉じた状態で出ます。
+          どちらでも、見出しをクリックすれば開閉できます。</span>
+        </span>
+      </label>
+      <p class="hint" style="margin-bottom:0">この設定はこのブラウザにだけ保存されます。</p>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin:0 0 6px">画面</h3>
+      <p class="hint">Bot のデスクトップは <code>cua-view</code> で開きます（SSH トンネル経由）。</p>
+    </div>
+  </section>
+</main>
+
+<footer id="composer" hidden>
+  <textarea id="text" placeholder="メッセージ（Cmd/Ctrl+Enter で送信）"></textarea>
+  <button class="primary" id="send">送信</button>
+</footer>
+</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const botSelect = $("bot"), log = $("log"), text = $("text");
+const send = $("send"), composer = $("composer");
+let after = 0;
+let signedIn = false;
+let avatars = {};
+let botSpaces = {};
+let draft = { name: "", avatar: null, step: 1 };
+const boxes = new Map();
+
+// A credential that arrived in the URL fragment is kept here too: some browsers
+// refuse the cookie we set on the login redirect, and this is the same value
+// over an origin the page already trusts.
+const SESSION_KEY = "cua.session";
+
+function takeFragmentCredential() {
+  const hash = location.hash;
+  if (!hash.startsWith("#k=")) return;
+  const value = decodeURIComponent(hash.slice(3));
+  if (value) localStorage.setItem(SESSION_KEY, value);
+  history.replaceState(null, "", location.pathname + location.search);
+}
+
+function sessionCredential() {
+  return (localStorage.getItem(SESSION_KEY) || "").trim();
+}
+
+function apiHeaders(extra) {
+  const headers = Object.assign({ "Content-Type": "application/json" }, extra || {});
+  const value = sessionCredential();
+  if (value) headers.Authorization = "Bearer " + value;
+  return headers;
+}
+
+function api(path, options) {
+  const opts = Object.assign({}, options);
+  opts.headers = apiHeaders(opts.headers);
+  return fetch(path, opts);
+}
+
+takeFragmentCredential();
+// A sign-out is a sign-out even when the page is opened with the query alone.
+if (location.search.includes("logout=1")) {
+  localStorage.removeItem(SESSION_KEY);
+  history.replaceState(null, "", "/ui");
+}
+
+// ---- the koala face -------------------------------------------------------
+// Ported from the Mac app's BotAvatar so both show the same bot.
+const KOALA = {
+  head: "M0.2216 0.8572C0.3254 0.8460 0.4282 0.8329 0.5279 0.7991C0.6277 0.7654 0.7386 0.7173 0.8201 0.6548C0.9016 0.5923 0.9719 0.5134 1.0168 0.4239C1.0618 0.3344 1.0870 0.2218 1.0896 0.1176C1.0923 0.0134 1.0666 -0.1023 1.0328 -0.2012C0.9990 -0.3002 0.9479 -0.3917 0.8870 -0.4761C0.8261 -0.5605 0.7477 -0.6423 0.6673 -0.7076C0.5869 -0.7729 0.5002 -0.8271 0.4047 -0.8679C0.3091 -0.9087 0.1992 -0.9414 0.0939 -0.9521C-0.0114 -0.9629 -0.1260 -0.9552 -0.2272 -0.9324C-0.3284 -0.9097 -0.4242 -0.8684 -0.5133 -0.8154C-0.6024 -0.7624 -0.6901 -0.6891 -0.7619 -0.6143C-0.8336 -0.5395 -0.8938 -0.4580 -0.9438 -0.3664C-0.9939 -0.2748 -1.0400 -0.1685 -1.0621 -0.0646C-1.0841 0.0394 -1.0930 0.1575 -1.0760 0.2575C-1.0589 0.3575 -1.0200 0.4555 -0.9597 0.5354C-0.8995 0.6153 -0.8051 0.6869 -0.7144 0.7367C-0.6236 0.7865 -0.5183 0.8126 -0.4150 0.8342C-0.3117 0.8559 -0.2009 0.8627 -0.0948 0.8666C0.0113 0.8704 0.1178 0.8685 0.2216 0.8572Z",
+  ear: "M-0.4380 0.4512C-0.4425 0.4275 -0.4057 0.3372 -0.4029 0.2892C-0.4001 0.2412 -0.4179 0.2039 -0.4213 0.1633C-0.4246 0.1227 -0.4252 0.0832 -0.4229 0.0456C-0.4207 0.0081 -0.4156 -0.0281 -0.4077 -0.0620C-0.3999 -0.0960 -0.3891 -0.1282 -0.3758 -0.1580C-0.3625 -0.1878 -0.3464 -0.2156 -0.3279 -0.2408C-0.3094 -0.2660 -0.2882 -0.2889 -0.2650 -0.3091C-0.2417 -0.3293 -0.2159 -0.3470 -0.1885 -0.3618C-0.1610 -0.3765 -0.1312 -0.3887 -0.1002 -0.3979C-0.0692 -0.4070 -0.0362 -0.4134 -0.0024 -0.4167C0.0313 -0.4200 0.0668 -0.4204 0.1023 -0.4177C0.1379 -0.4150 0.1747 -0.4092 0.2110 -0.4004C0.2473 -0.3916 0.2908 -0.3753 0.3202 -0.3648C0.3496 -0.3543 0.3712 -0.3463 0.3875 -0.3375C0.4039 -0.3286 0.4095 -0.3209 0.4182 -0.3115C0.4270 -0.3022 0.4342 -0.2918 0.4401 -0.2812C0.4459 -0.2706 0.4504 -0.2594 0.4533 -0.2480C0.4562 -0.2367 0.4577 -0.2249 0.4577 -0.2133C0.4576 -0.2017 0.4561 -0.1898 0.4531 -0.1783C0.4501 -0.1668 0.4459 -0.1552 0.4395 -0.1442C0.4332 -0.1333 0.4183 -0.1231 0.4151 -0.1125C0.4119 -0.1018 0.4172 -0.0914 0.4205 -0.0804C0.4237 -0.0693 0.4316 -0.0575 0.4347 -0.0460C0.4378 -0.0346 0.4391 -0.0229 0.4391 -0.0117C0.4391 -0.0004 0.4376 0.0108 0.4346 0.0215C0.4317 0.0322 0.4273 0.0427 0.4215 0.0524C0.4157 0.0621 0.4087 0.0715 0.4001 0.0800C0.3915 0.0884 0.3776 0.0945 0.3700 0.1029C0.3623 0.1114 0.3565 0.1200 0.3542 0.1309C0.3520 0.1417 0.3573 0.1562 0.3565 0.1680C0.3557 0.1797 0.3531 0.1910 0.3493 0.2016C0.3456 0.2121 0.3404 0.2221 0.3340 0.2311C0.3276 0.2401 0.3198 0.2485 0.3110 0.2558C0.3021 0.2630 0.2919 0.2695 0.2807 0.2747C0.2694 0.2800 0.2501 0.2785 0.2435 0.2872C0.2369 0.2959 0.2439 0.3150 0.2412 0.3268C0.2385 0.3386 0.2333 0.3489 0.2272 0.3581C0.2211 0.3673 0.2135 0.3755 0.2046 0.3821C0.1958 0.3887 0.1861 0.3948 0.1741 0.3979C0.1622 0.4011 0.1387 0.3989 0.1329 0.4011C0.1271 0.4032 0.1489 0.4109 0.1393 0.4107C0.1297 0.4105 0.0966 0.4027 0.0752 0.3997C0.0537 0.3967 0.0321 0.3943 0.0105 0.3925C-0.0111 0.3908 -0.0329 0.3897 -0.0545 0.3893C-0.0762 0.3889 -0.0979 0.3891 -0.1196 0.3899C-0.1413 0.3908 -0.1630 0.3923 -0.1845 0.3945C-0.2061 0.3967 -0.2277 0.3995 -0.2491 0.4029C-0.2705 0.4064 -0.2918 0.4105 -0.3130 0.4152C-0.3342 0.4200 -0.3552 0.4253 -0.3761 0.4313C-0.3969 0.4373 -0.4336 0.4749 -0.4380 0.4512Z",
+  earAt: { x: 0.9023, y: -0.4916 },
+  nose: "M0.23296 0.42779 C0.19057 0.46486 0.13275 0.48043 0.07633 0.48521 C0.02310 0.48973 -0.02903 0.48893 -0.08195 0.48281 C-0.14414 0.47564 -0.20747 0.45523 -0.24825 0.40734 C-0.26455 0.38820 -0.27439 0.36660 -0.27688 0.34165 C-0.27937 0.31670 -0.27812 0.29295 -0.27349 0.26758 C-0.25603 0.17211 -0.22610 0.08040 -0.18333 -0.00704 C-0.15783 -0.05918 -0.12021 -0.10971 -0.06567 -0.13415 C-0.01019 -0.15902 0.05222 -0.15085 0.09856 -0.11253 C0.11725 -0.09708 0.13279 -0.07983 0.14626 -0.05964 C0.16023 -0.03871 0.17253 -0.01777 0.18263 0.00543 L0.23245 0.11996 C0.25548 0.17287 0.28518 0.27454 0.28114 0.33176 C0.27848 0.36935 0.26162 0.40272 0.23295 0.42779 H0.23296 Z",
+  leftEye: { x: -0.53029, y: -0.04019, squash: 0.94409 },
+  rightEye: { x: 0.53510, y: -0.04055, squash: 0.94409 },
+};
+const PALETTE = {
+  cloud:    { face: "#E3E7EC", nose: "#7D8793", eye: "#0B0E13" },
+  violet:   { face: "#8B5CF6", nose: "#5B2FC9", eye: "#0B0E13" },
+  orange:   { face: "#FF7A2F", nose: "#C24E10", eye: "#0B0E13" },
+  sky:      { face: "#61BCFF", nose: "#2A7FC4", eye: "#0B0E13" },
+  graphite: { face: "#262A31", nose: "#4B525E", eye: "#F3F6FA" },
+  slate:    { face: "#8E98A3", nose: "#5B6571", eye: "#0B0E13" },
+};
+const ACCENT = {
+  cloud: "#61BCFF", graphite: "#8E98A3",
+  violet: "#8B5CF6", orange: "#FF7A2F", sky: "#61BCFF", slate: "#8E98A3",
+};
+const EYE_STYLES = { star: ["*", "*"], round: ["o", "o"], happy: ["^", "^"],
+                     calm: ["-", "-"], plus: ["+", "+"], delight: [">", "<"] };
+const GLYPHS = {
+  "*": { kind: "lines", segs: [[-0.17, 0, 0.17, 0], [-0.085, -0.147, 0.085, 0.147], [0.085, -0.147, -0.085, 0.147]], width: 0.066, rotate: 0, scale: 1.1 },
+  "o": { kind: "ellipse", width: 0.085, rotate: -12, scale: 1.2 },
+  "-": { kind: "lines", segs: [[-0.225, 0, 0.225, 0]], width: 0.075, rotate: 0, scale: 1.15 },
+  "^": { kind: "poly", pts: [[-0.17, 0.2], [0, -0.2], [0.17, 0.2]], width: 0.08, rotate: 0, scale: 1.1 },
+  "+": { kind: "lines", segs: [[-0.22, 0, 0.22, 0], [0, -0.22, 0, 0.22]], width: 0.085, rotate: 0, scale: 1.1 },
+  "x": { kind: "lines", segs: [[-0.22, 0, 0.22, 0], [0, -0.22, 0, 0.22]], width: 0.085, rotate: 45, scale: 1.1 },
+  ">": { kind: "poly", pts: [[-0.17, -0.17], [0.17, 0], [-0.17, 0.17]], width: 0.075, rotate: 0, scale: 1.1 },
+  "<": { kind: "poly", pts: [[0.17, -0.17], [-0.17, 0], [0.17, 0.17]], width: 0.075, rotate: 0, scale: 1.1 },
+  "/": { kind: "lines", segs: [[-0.11, 0.21, 0.11, -0.21]], width: 0.08, rotate: 0, scale: 1.1 },
+  "\\": { kind: "lines", segs: [[-0.11, -0.21, 0.11, 0.21]], width: 0.08, rotate: 0, scale: 1.1 },
+};
+let clipID = 0;
+
+function moodEyes(mood, style, t) {
+  const pair = EYE_STYLES[style] || EYE_STYLES.star;
+  switch (mood) {
+    case "idle": return (t % 4.2) > 4.0 ? ["-", "-"] : pair;
+    case "thinking": return (t % 1.6) < 0.8 ? ["/", "/"] : ["\\", "\\"];
+    case "working": return ["+", "+"];
+    case "needsApproval": return ["o", "o"];
+    case "done": return ["^", "^"];
+    case "paused": return ["-", "-"];
+    case "error": return ["x", "x"];
+    default: return pair;
+  }
+}
+
+function eyeMark(glyph, eye, color, spin) {
+  const g = GLYPHS[glyph] || GLYPHS.star;
+  const rotate = (glyph === "+" ? spin : 0) + g.rotate;
+  const tr = `translate(${eye.x} ${eye.y}) rotate(${rotate}) scale(${(g.scale * eye.squash).toFixed(4)} ${g.scale})`;
+  const stroke = `fill="none" stroke="${color}" stroke-width="${g.width}" stroke-linecap="butt"`;
+  if (g.kind === "ellipse") {
+    return `<ellipse transform="${tr}" cx="0" cy="0" rx="0.165" ry="0.2" ${stroke}/>`;
+  }
+  const d = g.kind === "poly"
+    ? "M" + g.pts.map((p) => p.join(" ")).join("L")
+    : g.segs.map((p) => `M${p[0]} ${p[1]}L${p[2]} ${p[3]}`).join("");
+  return `<path transform="${tr}" d="${d}" ${stroke}/>`;
+}
+
+function koalaSVG(avatar, mood = "idle", t = 0, cls = "avatar small") {
+  const av = Object.assign({ color: "sky", eyes: "star", ears: "scalloped" }, avatar || {});
+  const c = PALETTE[av.color] || PALETTE.sky;
+  const small = av.ears === "small";
+  const k = small ? 0.72 : 1;
+  const pull = small ? 0.86 : 1;
+  const ears = [-1, 1].map((side) => {
+    if (av.ears === "round") {
+      return `<circle cx="${(side * KOALA.earAt.x * 0.97).toFixed(4)}" cy="${(KOALA.earAt.y * 1.02).toFixed(4)}" r="0.4363" fill="${c.face}"/>`;
+    }
+    const tr = `translate(${(side * KOALA.earAt.x * pull).toFixed(4)} ${(KOALA.earAt.y * pull).toFixed(4)}) scale(${side * k} ${k})`;
+    return `<path transform="${tr}" d="${KOALA.ear}" fill="${c.face}"/>`;
+  }).join("");
+  const pair = moodEyes(mood, av.eyes, t);
+  const right = moodEyes(mood, av.eyes, t - 0.05)[1];
+  const spin = mood === "working" ? ((t % 1.2) < 0.6 ? 15 : -15) : 0;
+  const id = "koala" + (++clipID);
+  const animate = ["idle", "thinking", "working"].includes(mood) ? "1" : "0";
+  return `<svg class="${cls}" viewBox="-1.425 -1.365 2.85 2.85" data-avatar='${escapeHtml(JSON.stringify(av))}' data-mood="${mood}" data-anim="${animate}" aria-hidden="true">` +
+    ears +
+    `<path d="${KOALA.head}" fill="${c.face}"/>` +
+    `<clipPath id="${id}"><path d="${KOALA.head}"/></clipPath>` +
+    `<g clip-path="url(#${id})"><path d="${KOALA.nose}" fill="${c.nose}"/></g>` +
+    eyeMark(pair[0], KOALA.leftEye, c.eye, spin) +
+    eyeMark(right, KOALA.rightEye, c.eye, spin) +
+    `</svg>`;
+}
+
+// The same shape pi uses for a turn in progress: a turning mark, the state, and
+// how long it has been going.
+const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+let spinFrame = 0;
+
+function tickStatus(line) {
+  const started = Number(line.dataset.startedAt) || Math.floor(Date.now() / 1000);
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - started);
+  const mark = line.querySelector(".spin");
+  if (mark) mark.textContent = SPINNER[spinFrame % SPINNER.length];
+  const elapsed = line.querySelector(".elapsed");
+  if (elapsed) {
+    elapsed.textContent = seconds < 60
+      ? " " + seconds + "s"
+      : " " + Math.floor(seconds / 60) + "m" + (seconds % 60) + "s";
+  }
+}
+
+// Idle blinks, thinking glances and the turn spinner all need a clock.
+setInterval(() => {
+  const t = performance.now() / 1000;
+  spinFrame += 1;
+  document.querySelectorAll(".typing").forEach(tickStatus);
+  document.querySelectorAll("svg.avatar[data-anim='1']").forEach((svg) => {
+    let av;
+    try { av = JSON.parse(svg.dataset.avatar); } catch (e) { return; }
+    svg.outerHTML = koalaSVG(av, svg.dataset.mood, t, svg.getAttribute("class"));
+  });
+}, 200);
+
+function defaultAvatarFor(name) {
+  const order = ["violet", "orange", "sky", "cloud", "slate", "graphite"];
+  let sum = 0;
+  for (const ch of name) sum += ch.codePointAt(0);
+  return { color: order[Math.abs(sum) % order.length], eyes: "star", ears: "scalloped" };
+}
+
+function show(view) {
+  for (const b of document.querySelectorAll("nav button")) {
+    b.setAttribute("aria-selected", String(b.dataset.view === view));
+  }
+  for (const s of ["chat", "bots", "routines", "settings"]) {
+    $("view-" + s).hidden = s !== view;
+  }
+  composer.hidden = view !== "chat" || !signedIn;
+  // The bot rail is part of the conversation, so the other tabs get the width.
+  document.body.dataset.view = view;
+  localStorage.setItem("cua.view", view);
+  if (view === "bots") { loadSpaces(); loadBotList(); }
+  if (view === "routines") loadRoutines();
+  if (view === "settings") loadSession();
+}
+document.querySelectorAll("nav button").forEach((b) => { b.onclick = () => show(b.dataset.view); });
+
+function currentBot() { return botSelect.value; }
+
+function accentOf(botId) {
+  const av = avatars[botId] || {};
+  return ACCENT[av.color] || ACCENT.sky;
+}
+
+function renderRail() {
+  const rail = $("rail");
+  rail.innerHTML = '<div class="railLabel">Bots</div>';
+  for (const option of botSelect.options) {
+    if (!option.value) continue;
+    const b = document.createElement("button");
+    b.className = "bot";
+    b.setAttribute("aria-current", String(option.value === currentBot()));
+    b.innerHTML = koalaSVG(avatars[option.value], "idle", 0, "avatar row") +
+      '<span class="nm">' + escapeHtml(option.label) + "</span>";
+    b.onclick = () => {
+      botSelect.value = option.value;
+      botSelect.dispatchEvent(new Event("change"));
+    };
+    rail.append(b);
+  }
+  if (rail.children.length === 1) {
+    const empty = document.createElement("div");
+    empty.className = "railLabel";
+    empty.textContent = "まだいません";
+    rail.append(empty);
+  }
+}
+
+function paintChatHead() {
+  const id = currentBot();
+  $("chatFace").innerHTML = id ? koalaSVG(avatars[id], "idle", 0, "avatar small") : "";
+  $("chatName").textContent = id || "Bot";
+  $("chatPresence").textContent = id ? presenceLine(id) : "Bot を選んでください";
+}
+
+function presenceLine(botId) {
+  if (!botId) return "";
+  for (const box of boxes.values()) {
+    if (box.dataset.status === "running") return "作業中…";
+  }
+  const space = botSpaces[botId];
+  return space ? "待機中 ・ " + space : "待機中";
+}
+
+// Turns recorded before the chat stopped showing the CLI's own lines still
+// carry them, so tidy the text on the way to the screen.
+const NOISE = [
+  /^turn bot=/,
+  /^\[install\]/,
+  /^\[notice\]/,
+  /^\[turn \d+ ended/,
+  /^\{"harness":/,
+];
+
+function cleanOutput(text) {
+  return String(text || "")
+    .split("\n")
+    .filter((line) => !NOISE.some((re) => re.test(line.trim())))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// pi keeps the model's reasoning apart from its answer; so does this. The agent
+// streams thinking as "[thinking] ..." lines, which belong in a quiet block.
+function splitOutput(text) {
+  const lines = cleanOutput(text).split("\n");
+  // Thinking arrives first and the answer follows the last "[thinking]" line;
+  // a long thought wraps onto lines without the prefix, so the split is at that
+  // last marker rather than per line.
+  let last = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^\s*\[thinking\]/.test(lines[i])) last = i;
+  }
+  if (last < 0) return { thinking: "", answer: lines.join("\n").trim() };
+  const thinking = lines.slice(0, last + 1)
+    .map((line) => line.replace(/^\s*\[thinking\]\s?/, ""))
+    .join("\n")
+    .trim();
+  return { thinking, answer: lines.slice(last + 1).join("\n").trim() };
+}
+
+// Whether the reasoning starts open is a setting; once the operator opens or
+// closes a block by hand, that choice wins for the rest of the turn.
+const THINKING_KEY = "cua.thinking.open";
+
+function thinkingOpenByDefault() {
+  const value = localStorage.getItem(THINKING_KEY);
+  if (value === null) return true;
+  return value === "1";
+}
+
+function renderThinking(box, part, running) {
+  let details = box.querySelector(".think");
+  if (!part.thinking) {
+    if (details) details.remove();
+    return;
+  }
+  if (!details) {
+    details = document.createElement("details");
+    details.className = "think";
+    details.open = thinkingOpenByDefault();
+    const summary = document.createElement("summary");
+    summary.textContent = "考えていること";
+    const body = document.createElement("div");
+    body.className = "body";
+    details.append(summary, body);
+    // Only a click on the header is a decision by the operator; the setting
+    // closing or opening the block programmatically must not count as one.
+    summary.addEventListener("click", () => { details.dataset.touched = "1"; });
+    box.insertBefore(details, box.querySelector(".msg.bot"));
+  }
+  details.querySelector(".body").textContent = part.thinking;
+  if (!details.dataset.touched) details.open = thinkingOpenByDefault();
+}
+
+function render(turn) {
+  const box = document.createElement("div");
+  box.className = "turn";
+  box.dataset.status = turn.status;
+
+  const ask = document.createElement("div");
+  ask.className = "msg user";
+  const askBubble = document.createElement("div");
+  askBubble.className = "bubble";
+  askBubble.style.background = accentOf(currentBot()) + "38";
+  askBubble.textContent = turn.prompt;
+  ask.append(askBubble);
+
+  const part = splitOutput(turn.output);
+  const say = document.createElement("div");
+  say.className = "msg bot";
+  const sayBubble = document.createElement("div");
+  sayBubble.className = "bubble";
+  sayBubble.textContent = part.answer;
+  say.append(sayBubble);
+
+  box.append(ask, say);
+  renderThinking(box, part, turn.status === "running");
+  const tail = statusLine(turn);
+  if (tail) box.append(tail);
+  const thread = $("thread") || log;
+  const chips = thread.querySelector(".chips");
+  if (chips) chips.remove();
+  thread.append(box);
+  scrollToBottom();
+  paintChatHead();
+  return box;
+}
+
+function statusLine(turn) {
+  if (turn.status === "running") {
+    const s = document.createElement("div");
+    s.className = "typing";
+    s.dataset.startedAt = String(turn.startedAt || Math.floor(Date.now() / 1000));
+    s.innerHTML = '<span class="spin">' + SPINNER[0] + '</span>' +
+      '<span class="label">考えています…</span><span class="elapsed"></span>';
+    tickStatus(s);
+    return s;
+  }
+  if (turn.status === "failed") {
+    const s = document.createElement("div");
+    s.className = "msg notice";
+    const b = document.createElement("div");
+    b.className = "bubble";
+    b.style.color = "#ef5350";
+    b.textContent = "うまくいきませんでした: " + (turn.error || "unknown");
+    s.append(b);
+    return s;
+  }
+  return null;
+}
+
+// The scrolling box is <main>, not the thread itself; a chat that does not
+// follow the reply makes the turn look missing.
+function scrollToBottom() {
+  const main = document.querySelector("main");
+  if (!main) return;
+  main.scrollTop = main.scrollHeight;
+  // The thread grows as the faces and text are laid out; follow it once more
+  // after that, or the last message lands just below the fold.
+  requestAnimationFrame(() => { main.scrollTop = main.scrollHeight; });
+}
+
+function resetView() {
+  after = 0;
+  boxes.clear();
+  log.innerHTML = '<div class="thread" id="thread"></div>';
+  paintEmptyState();
+}
+
+function paintEmptyState() {
+  if (boxes.size > 0 || !currentBot()) return;
+  const thread = $("thread");
+  if (!thread) return;
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  for (const text of [
+    "この Bot にできることを教えて",
+    "昨日の作業をまとめて",
+    "毎朝9時に変更点を要約するルーティンを提案して",
+  ]) {
+    const b = document.createElement("button");
+    b.textContent = text;
+    b.onclick = () => { $("text").value = text; $("text").focus(); };
+    chips.append(b);
+  }
+  if (!thread.contains(chips)) thread.append(chips);
+}
+
+function noteLoginFailure() {
+  if (!location.search.includes("login=failed")) return;
+  const hint = $("gateHint");
+  hint.hidden = false;
+  hint.textContent = "このリンクはもう使えません（資格情報が失効しています）。" +
+    "ターミナルで cua-bots-open を実行し直してください。";
+  history.replaceState(null, "", "/ui");
+}
+
+async function loadBots() {
+  const wanted = localStorage.getItem("cua.bot") || "";
+  botSelect.innerHTML = "";
+  let data;
+  try {
+    const r = await api("/v1/bots");
+    if (r.status === 401) { signedIn = false; return; }
+    if (r.status === 429) {
+      // Busy is not signed out: keep what we have and try again shortly.
+      botSelect.append(new Option("(混み合っています)", ""));
+      return;
+    }
+    if (!r.ok) { botSelect.append(new Option("(読み込み失敗)", "")); return; }
+    data = await r.json();
+    signedIn = true;
+  } catch (e) { botSelect.append(new Option("(接続できません)", "")); return; }
+  $("gate").hidden = true;
+  avatars = data.avatars || {};
+  botSpaces = data.spaces || {};
+  paintHeaderFace();
+  (data.bots || []).forEach((id) => botSelect.append(new Option(id, id)));
+  if ((data.bots || []).length === 0) botSelect.append(new Option("(Bot がありません)", ""));
+  if (wanted && [...botSelect.options].some((o) => o.value === wanted)) botSelect.value = wanted;
+  localStorage.setItem("cua.bot", botSelect.value);
+  renderRail();
+  paintChatHead();
+}
+
+function paintHeaderFace() {
+  // The rail and the chat header carry the faces now; this stays for the
+  // moments that only need the side effects (selection, presence).
+  const id = currentBot();
+  const slot = $("botFace");
+  if (slot) slot.innerHTML = id ? koalaSVG(avatars[id], "idle", 0, "avatar small") : "";
+  paintChatHead();
+}
+
+async function poll() {
+  if (!signedIn || !currentBot()) return;
+  if (document.hidden) return;
+  try {
+    const r = await api(`/v1/bots/${encodeURIComponent(currentBot())}/chat?after=${after}`);
+    if (r.status === 429) {
+      $("chatPresence").textContent = "混み合っています。少し待ってから更新します…";
+      return;
+    }
+    if (!r.ok) return;
+    const data = await r.json();
+    (data.turns || []).forEach((t) => {
+      const box = boxes.get(t.id);
+      if (!box) { boxes.set(t.id, render(t)); return; }
+      const part = splitOutput(t.output);
+      const bubble = box.querySelector(".msg.bot .bubble");
+      if (bubble) bubble.textContent = part.answer;
+      renderThinking(box, part, t.status === "running");
+      box.dataset.status = t.status;
+      const running = box.querySelector(".typing");
+      if (running && t.status === "running") tickStatus(running);
+      const typed = box.querySelector(".typing, .msg.notice");
+      if (t.status !== "running") {
+        if (typed) typed.remove();
+        const line = statusLine(t);
+        if (line) box.append(line);
+      }
+    });
+    after = data.next ?? after;
+    paintChatHead();
+  } catch (e) { /* the next tick retries */ }
+}
+
+async function submit() {
+  const body = text.value.trim();
+  if (!body || !signedIn || !currentBot()) return;
+  send.disabled = true;
+  try {
+    const r = await api(`/v1/bots/${encodeURIComponent(currentBot())}/chat`, {
+      method: "POST", body: JSON.stringify({ prompt: body }) });
+    if (r.ok) { text.value = ""; poll(); }
+    else if (r.status === 429) { alert("この Bot は実行中です。終わるまで待ってください。"); }
+    else if (r.status === 401) { showSignedOut(); }
+    else { alert("送信できません: " + (await r.text())); }
+  } finally { send.disabled = false; }
+}
+
+function showSignedOut() {
+  signedIn = false;
+  $("gate").hidden = false;
+  composer.hidden = true;
+  log.innerHTML = "";
+}
+
+async function loadBotList() {
+  const body = $("botList");
+  if (!signedIn) { body.innerHTML = '<tr><td colspan="5" class="empty">サインインしてください。</td></tr>'; return; }
+  try {
+    const r = await api($("showArchived").checked ? "/v1/bots?archived=1" : "/v1/bots");
+    if (!r.ok) throw new Error(String(r.status));
+    const data = await r.json();
+    body.innerHTML = "";
+    if ((data.bots || []).length === 0) {
+      body.innerHTML = '<tr><td colspan="5" class="empty">まだありません。上の欄から作ってください。</td></tr>';
+      return;
+    }
+    for (const id of data.bots) {
+      body.append(botRow(id, false));
+    }
+    const archived = data.archived || [];
+    $("archivedTable").hidden = !$("showArchived").checked || archived.length === 0;
+    const archivedBody = $("archivedList");
+    archivedBody.innerHTML = "";
+    archived.forEach((id) => archivedBody.append(botRow(id, true)));
+  } catch (e) { body.innerHTML = '<tr><td colspan="5" class="empty">読み込めませんでした。</td></tr>'; }
+}
+
+function botRow(id, archived) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td class="face"></td><td>${escapeHtml(id)}</td><td class="space"></td><td class="state"></td><td></td>`;
+  tr.firstElementChild.innerHTML = koalaSVG(avatars[id], "idle", 0, "avatar small");
+  const cell = tr.lastElementChild;
+  if (archived) {
+    const back = document.createElement("button");
+    back.className = "ghost";
+    back.textContent = "戻す";
+    back.onclick = () => setArchived(id, false);
+    cell.append(back);
+  } else {
+    const open = document.createElement("button");
+    open.className = "ghost";
+    open.textContent = "開く";
+    open.onclick = () => { botSelect.value = id; localStorage.setItem("cua.bot", id); resetView(); show("chat"); poll(); };
+    const issue = document.createElement("button");
+    issue.className = "ghost";
+    issue.textContent = "資格情報";
+    issue.style.marginLeft = "6px";
+    issue.onclick = () => issueCredential(id);
+    const look = document.createElement("button");
+    look.className = "ghost";
+    look.textContent = "見た目";
+    look.style.marginLeft = "6px";
+    look.onclick = () => openEditor(id);
+    const put = document.createElement("button");
+    put.className = "ghost";
+    put.textContent = "アーカイブ";
+    put.style.marginLeft = "6px";
+    put.onclick = () => setArchived(id, true);
+    cell.append(open, look, issue, put);
+  }
+  fillSpace(id, tr, archived);
+  return tr;
+}
+
+async function setArchived(botId, archive) {
+  const what = archive ? "アーカイブ" : "元に戻す";
+  if (archive && !confirm(botId + " をアーカイブします。Space と履歴は残り、資格情報は無効になります。")) return;
+  const r = await api(`/v1/manage/bots/${encodeURIComponent(botId)}/${archive ? "archive" : "unarchive"}`,
+    { method: "POST" });
+  if (!r.ok) { alert(what + "できません: " + (await r.text())); return; }
+  const list = await (await api("/v1/bots")).json().catch(() => ({}));
+  await loadBots();
+  if (localStorage.getItem("cua.bot") === botId && archive) {
+    botSelect.value = (list.bots || [])[0] || "";
+    localStorage.setItem("cua.bot", botSelect.value);
+    resetView();
+    poll();
+  }
+  loadBotList();
+}
+
+async function fillSpace(botId, tr, archived) {
+  try {
+    const r = await api(`/v1/bots/${encodeURIComponent(botId)}/space`);
+    if (!r.ok) return;
+    const st = await r.json();
+    tr.querySelector(".space").textContent = st.spaceID || "-";
+    const pill = document.createElement("span");
+    pill.className = "pill " + (st.state || "");
+    pill.textContent = st.state === "ready" ? "準備完了" : st.state === "pending" ? "準備中…" : "失敗";
+    if (archived) {
+      tr.querySelector(".state").textContent = "";
+      pill.className = "pill paused";
+      pill.textContent = "アーカイブ";
+    }
+    if (st.detail) pill.title = st.detail;
+    tr.querySelector(".state").append(pill);
+  } catch (e) { /* leave blank */ }
+}
+
+async function issueCredential(botId) {
+  const r = await api(`/v1/manage/bots/${encodeURIComponent(botId)}/token`, { method: "POST" });
+  if (!r.ok) { alert("発行できません: " + (await r.text())); return; }
+  const data = await r.json();
+  $("issuedValue").value = data.value || "";
+  $("issued").hidden = false;
+}
+
+async function loadSpaces() {
+  const pick = $("spacePick");
+  pick.innerHTML = "";
+  pick.append(new Option("（読み込み中…）", ""));
+  try {
+    const r = await api("/v1/spaces");
+    if (!r.ok) throw new Error(String(r.status));
+    const data = await r.json();
+    pick.innerHTML = "";
+    (data.spaces || []).forEach((sp) => {
+      pick.append(new Option((sp.name || sp.id) + "  (" + sp.id + ")", sp.id));
+    });
+    pick.append(new Option("＋ 新しい Space をつくる", "__new__"));
+    if (data.note) {
+      $("spaceNoteText").textContent =
+        "Space の一覧を取得できません（" + data.note + "）。新しくつくってください。";
+    }
+    syncSpacePick();
+  } catch (e) {
+    pick.innerHTML = "";
+    pick.append(new Option("＋ 新しい Space をつくる", "__new__"));
+    $("spaceNoteText").textContent =
+      "Space の一覧を取得できませんでした。新しくつくれます。";
+    syncSpacePick();
+  }
+}
+
+function syncSpacePick() {
+  $("newSpaceRow").hidden = $("spacePick").value !== "__new__";
+}
+$("spacePick").onchange = syncSpacePick;
+$("showArchived").onchange = loadBotList;
+
+$("gateSignIn").onclick = async () => {
+  const value = $("gateCred").value.trim();
+  if (!value) return;
+  localStorage.setItem(SESSION_KEY, value);
+  $("gateCred").value = "";
+  await loadBots();
+  if (signedIn) { $("gate").hidden = true; show("chat"); poll(); }
+  else { localStorage.removeItem(SESSION_KEY); alert("この資格情報では入れませんでした。"); }
+};
+
+// ---- creating a bot: name, look, place -----------------------------------
+const COLORS = ["violet", "orange", "sky", "cloud", "slate", "graphite"];
+const COLOR_NAMES = { violet: "すみれ", orange: "オレンジ", sky: "そら",
+                      cloud: "くも", slate: "スレート", graphite: "こく" };
+const EYE_NAMES = { star: "星", round: "まる", happy: "わらい",
+                    calm: "ねむり", plus: "プラス", delight: "よろこび" };
+const EAR_NAMES = { scalloped: "なみ", round: "まる", small: "ちいさめ" };
+const STEPS = [
+  { title: "なんと呼ぶ？", lead: "名前を決めると、色もその名前から決まります。" },
+  { title: "見た目を決める", lead: "あとから変えられます。" },
+  { title: "どこで動かす？", lead: "既存の Space を選ぶか、新しい Space をつくります。" },
+];
+
+function wizardAvatar() {
+  return draft.avatar || defaultAvatarFor(draft.name || "bot");
+}
+
+function paintWizard() {
+  $("wizardSteps").textContent = draft.step + " / 3";
+  $("wizardTitle").textContent = STEPS[draft.step - 1].title;
+  $("wizardLead").textContent = STEPS[draft.step - 1].lead;
+  $("wizardFace").innerHTML =
+    koalaSVG(wizardAvatar(), draft.step === 2 ? "happy" : "idle", 0, "avatar hero");
+  $("step1").hidden = draft.step !== 1;
+  $("step2").hidden = draft.step !== 2;
+  $("step3").hidden = draft.step !== 3;
+  $("wizBack").hidden = draft.step === 1;
+  $("wizNext").hidden = draft.step === 3;
+  $("createBot").hidden = draft.step !== 3;
+  $("wizNext").disabled = draft.step === 1 && !$("newBot").value.trim();
+  paintPicks();
+}
+
+let editing = null;
+
+function openEditor(botId) {
+  editing = botId;
+  $("avatarEditor").hidden = false;
+  $("editorTitle").textContent = botId + " の見た目";
+  paintEditor();
+  $("avatarEditor").scrollIntoView({ block: "nearest" });
+}
+
+function paintEditor() {
+  if (!editing) return;
+  const av = avatars[editing] || defaultAvatarFor(editing);
+  $("editorFace").innerHTML = koalaSVG(av, "happy", 0, "avatar row");
+  const box = $("editorPicks");
+  box.innerHTML = "";
+  const add = (label, key, values, names) => {
+    const wrap = document.createElement("label");
+    wrap.className = "hint";
+    wrap.style.marginRight = "12px";
+    wrap.textContent = label + " ";
+    const sel = document.createElement("select");
+    for (const v of values) sel.append(new Option(names[v], v));
+    sel.value = av[key];
+    sel.onchange = async () => {
+      const next = Object.assign({}, avatars[editing], { [key]: sel.value });
+      avatars[editing] = next;
+      paintEditor();
+      paintHeaderFace();
+      loadBotList();
+      await api("/v1/manage/bots/" + encodeURIComponent(editing) + "/avatar", {
+        method: "POST", body: JSON.stringify(next),
+      });
+    };
+    wrap.append(sel);
+    box.append(wrap);
+  };
+  add("色", "color", COLORS, COLOR_NAMES);
+  add("目", "eyes", Object.keys(EYE_STYLES), EYE_NAMES);
+  add("耳", "ears", ["scalloped", "round", "small"], EAR_NAMES);
+  paintSpacePicker(av);
+}
+
+// The Space is shown next to the face because a Bot that claims one Space while
+// running in another is the failure this screen exists to make visible.
+async function paintSpacePicker() {
+  const box = $("editorPicks");
+  const wrap = document.createElement("label");
+  wrap.className = "hint";
+  wrap.style.marginRight = "12px";
+  wrap.textContent = "Space ";
+  const sel = document.createElement("select");
+  let list = [];
+  try {
+    const r = await api("/v1/spaces");
+    if (r.ok) list = (await r.json()).spaces || [];
+  } catch (e) { /* leave it empty */ }
+  const current = botSpaces[editing] || "";
+  const ids = list.map((sp) => sp.id);
+  if (current && !ids.includes(current)) ids.push(current);
+  for (const id of ids) sel.append(new Option(id, id));
+  sel.value = current;
+  sel.onchange = async () => {
+    if (!confirm(editing + " を " + sel.value + " で動かします。よろしいですか？")) {
+      sel.value = current;
+      return;
+    }
+    const r = await api("/v1/manage/bots/" + encodeURIComponent(editing) + "/space", {
+      method: "POST", body: JSON.stringify({ spaceID: sel.value }),
+    });
+    if (!r.ok) { alert("移せません: " + (await r.text())); sel.value = current; return; }
+    botSpaces[editing] = sel.value;
+    loadBotList();
+  };
+  wrap.append(sel);
+  box.append(wrap);
+}
+
+function paintPicks() {
+  const av = wizardAvatar();
+  const fill = (id, values, current, names, apply) => {
+    const box = $(id);
+    box.innerHTML = "";
+    for (const v of values) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(v === current));
+      if (id === "colorPicks") {
+        b.innerHTML = `<span class="swatch" style="background:${PALETTE[v].face}"></span> ` + names[v];
+      } else {
+        b.textContent = names[v];
+      }
+      b.onclick = () => {
+        draft.avatar = Object.assign(wizardAvatar(), apply(v));
+        paintWizard();
+      };
+      box.append(b);
+    }
+  };
+  fill("colorPicks", COLORS, av.color, COLOR_NAMES, (v) => ({ color: v }));
+  fill("eyePicks", Object.keys(EYE_STYLES), av.eyes, EYE_NAMES, (v) => ({ eyes: v }));
+  fill("earPicks", ["scalloped", "round", "small"], av.ears, EAR_NAMES, (v) => ({ ears: v }));
+}
+
+$("newBot").addEventListener("input", () => {
+  draft.name = $("newBot").value.trim();
+  if (!draft.touched) draft.avatar = defaultAvatarFor(draft.name || "bot");
+  paintWizard();
+});
+$("wizBack").onclick = () => { draft.step = Math.max(1, draft.step - 1); paintWizard(); };
+$("wizNext").onclick = async () => {
+  if (draft.step === 1) {
+    if (!$("newBot").value.trim()) { alert("名前を入れてください。"); return; }
+    draft.step = 2;
+    paintWizard();
+    return;
+  }
+  if (draft.step === 2) {
+    draft.touched = true;
+    draft.step = 3;
+    paintWizard();
+    if ($("spacePick").options.length <= 1) await loadSpaces();
+  }
+};
+
+$("createBot").onclick = async () => {
+  const name = draft.name || $("newBot").value.trim();
+  if (!name) { alert("名前を入れてください。"); return; }
+  const picked = $("spacePick").value;
+  const makeSpace = picked === "__new__" || picked === "";
+  const space = makeSpace
+    ? "local:" + ($("newSpace").value.trim() || ("bot-" + name))
+    : picked;
+  $("createBot").disabled = true;
+  try {
+    const r = await api("/v1/manage/bots", {
+      method: "POST",
+      body: JSON.stringify({ botID: name, spaceID: space, createSpace: makeSpace }),
+    });
+    if (!r.ok) {
+      if (r.status === 401) { showSignedOut(); return; }
+      alert("つくれません (" + r.status + "): " + (await r.text()));
+      return;
+    }
+    const av = wizardAvatar();
+    await api(`/v1/manage/bots/${encodeURIComponent(name)}/avatar`, {
+      method: "POST", body: JSON.stringify(av),
+    }).catch(() => {});
+    avatars[name] = av;
+    $("newBot").value = "";
+    $("newSpace").value = "";
+    draft = { name: "", avatar: null, step: 1, touched: false };
+    paintWizard();
+    await loadBots();
+    botSelect.value = name;
+    localStorage.setItem("cua.bot", name);
+    paintHeaderFace();
+    resetView();
+    $("creating").hidden = false;
+    if (makeSpace) {
+      $("creatingText").textContent =
+        name + " の Space をつくっています。1〜2分かかります。";
+      watchSpace(name);
+    } else {
+      $("creatingText").textContent = name + " を " + space + " に追加しました。";
+      show("chat");
+      poll();
+    }
+  } finally { $("createBot").disabled = false; }
+};
+
+async function watchSpace(botId) {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 3000));
+    let st;
+    try {
+      const r = await api(`/v1/bots/${encodeURIComponent(botId)}/space`);
+      if (!r.ok) continue;
+      st = await r.json();
+    } catch (e) { continue; }
+    if (st.state === "ready") {
+      $("creatingText").textContent = botId + " の準備ができました。";
+      show("chat");
+      poll();
+      return;
+    }
+    if (st.state === "failed") {
+      $("creatingText").textContent = "Space の準備に失敗しました: " + (st.detail || "");
+      loadBotList();
+      return;
+    }
+  }
+}
+$("goChat").onclick = () => { show("chat"); poll(); };
+
+async function loadRoutines() {
+  const body = $("routines");
+  const bot = currentBot();
+  $("routineFace").innerHTML = bot ? koalaSVG(avatars[bot], "idle", 0, "avatar small") : "";
+  $("routineTitle").textContent = bot ? bot + " のルーティン" : "ルーティン";
+  if (!signedIn || !bot) {
+    body.innerHTML = '<tr><td colspan="6" class="empty">Bot を選んでください。</td></tr>';
+    return;
+  }
+  try {
+    const r = await api("/v1/bots/" + encodeURIComponent(bot) + "/routines");
+    if (!r.ok) {
+      body.innerHTML = '<tr><td colspan="6" class="empty">読み込めませんでした。</td></tr>';
+      return;
+    }
+    const data = await r.json();
+    const rows = data.routines || [];
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" class="empty">まだありません。上の欄から足せます。</td></tr>';
+      return;
+    }
+    body.innerHTML = "";
+    for (const job of rows) {
+      const tr = document.createElement("tr");
+      const when = job.nextRunAt ? new Date(job.nextRunAt * 1000).toLocaleString() : "-";
+      tr.innerHTML = "<td>" + escapeHtml(job.title) + "</td><td>" + formatEvery(job.everySec) +
+        "</td><td>" + when + '</td><td><span class="pill ' + (job.paused ? "paused" : "") + '">' +
+        (job.paused ? "停止中" : "稼働") + "</span></td><td><code>" + escapeHtml(job.prompt) +
+        "</code></td><td></td>";
+      const cell = tr.lastElementChild;
+      const toggle = document.createElement("button");
+      toggle.className = "ghost";
+      toggle.textContent = job.paused ? "再開" : "停止";
+      toggle.onclick = () => routineAction(job.id, job.paused ? "resume" : "pause");
+      const del = document.createElement("button");
+      del.className = "ghost";
+      del.style.marginLeft = "6px";
+      del.textContent = "削除";
+      del.onclick = async () => {
+        if (!confirm("「" + job.title + "」を削除します。よろしいですか？")) return;
+        const r = await api("/v1/bots/" + encodeURIComponent(bot) + "/routines/" + encodeURIComponent(job.id),
+          { method: "DELETE" });
+        if (!r.ok) { alert("削除できません: " + (await r.text())); return; }
+        loadRoutines();
+      };
+      cell.append(toggle, del);
+      body.append(tr);
+    }
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="6" class="empty">読み込めませんでした。</td></tr>';
+  }
+}
+
+async function routineAction(jobId, action) {
+  const bot = currentBot();
+  const r = await api("/v1/bots/" + encodeURIComponent(bot) + "/routines/" + encodeURIComponent(jobId) + "/" + action,
+    { method: "POST" });
+  if (!r.ok) { alert("できません: " + (await r.text())); return; }
+  loadRoutines();
+}
+
+$("rtAdd").onclick = async () => {
+  const bot = currentBot();
+  if (!bot) { alert("先に Bot を選んでください。"); return; }
+  const title = $("rtTitle").value.trim();
+  const prompt = $("rtPrompt").value.trim();
+  if (!title || !prompt) { alert("名前と頼むことを入れてください。"); return; }
+  $("rtAdd").disabled = true;
+  try {
+    const r = await api("/v1/bots/" + encodeURIComponent(bot) + "/routines", {
+      method: "POST",
+      body: JSON.stringify({
+        title: title, prompt: prompt,
+        everySec: Number($("rtEvery").value),
+        delaySec: Number($("rtDelay").value),
+      }),
+    });
+    if (!r.ok) { alert("追加できません: " + (await r.text())); return; }
+    $("rtTitle").value = "";
+    $("rtPrompt").value = "";
+    loadRoutines();
+  } finally { $("rtAdd").disabled = false; }
+};
+
+async function loadSession() {
+  const facts = $("sessionFacts");
+  facts.innerHTML = "";
+  const add = (label, value) => {
+    const li = document.createElement("li");
+    li.textContent = label + ": " + value;
+    facts.append(li);
+  };
+  let data;
+  try {
+    const r = await api("/v1/session");
+    if (!r.ok) { facts.innerHTML = "<li>入っていません。cua-bots-open で入り直してください。</li>"; return; }
+    data = await r.json();
+  } catch (e) {
+    facts.innerHTML = "<li>状態を読めませんでした。</li>";
+    return;
+  }
+  add("種類", data.role === "administrator" ? "管理者（すべての Bot を操作）" : "Bot（" + data.botID + " のみ）");
+  if (data.expiresAt) {
+    add("有効期限", new Date(data.expiresAt * 1000).toLocaleString());
+  }
+  add("できること", (data.capabilities || []).join(", ") || "-");
+}
+$("thinkingOpen").checked = thinkingOpenByDefault();
+$("thinkingOpen").onchange = () => {
+  localStorage.setItem(THINKING_KEY, $("thinkingOpen").checked ? "1" : "0");
+  // Apply it to what is already on screen, right away.
+  document.querySelectorAll(".think").forEach((details) => {
+    delete details.dataset.touched;
+    details.open = $("thinkingOpen").checked;
+  });
+};
+
+$("logout").onclick = () => {
+  localStorage.removeItem(SESSION_KEY);
+  location.href = "/ui?logout=1";
+};
+
+function formatEvery(sec) {
+  if (!sec) return "-";
+  if (sec % 86400 === 0) return (sec / 86400) + "日";
+  if (sec % 3600 === 0) return (sec / 3600) + "時間";
+  if (sec % 60 === 0) return (sec / 60) + "分";
+  return sec + "秒";
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;",
+    '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+send.onclick = submit;
+text.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submit(); }
+});
+botSelect.onchange = () => {
+  localStorage.setItem("cua.bot", botSelect.value);
+  paintHeaderFace();
+  paintChatHead();
+  renderRail();
+  resetView();
+  poll();
+  // Whatever the open tab shows belongs to the Bot that was selected.
+  const view = localStorage.getItem("cua.view");
+  if (view === "routines") loadRoutines();
+  if (view === "bots") loadBotList();
+};
+
+const initial = localStorage.getItem("cua.view") || "chat";
+paintWizard();
+noteLoginFailure();
+loadBots().then(() => {
+  if (!signedIn) { $("gate").hidden = false; composer.hidden = true; show("chat"); return; }
+  show(initial);
+  poll().then(scrollToBottom);
+});
+setInterval(poll, 2000);
+</script>
+</body>
+</html>
