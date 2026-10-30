@@ -363,33 +363,67 @@ Web の右パネル「エージェント」から、Bot ごとに harness / mode
 - 鍵は `turn.env` に置き、画面には変数名だけを書く。
 - harness と wire の対応は `cua agent harnesses` と `cua agent run --help` を正本にする。
 
-## 4.5 TLS（任意・方針）
+## 4.5 TLS
 
-**最初は WireGuard 内の平文＋トークンで開始する。** 理由は次のとおり。
+VPN 内でも TLS を使う（2026-10-30 から有効）。経路は次のとおり。
 
-- 経路は WireGuard で暗号化され、UFW で `wg0` からのみ許可している。第三の peer は復号できない。
-- トークンは Bot ごと、0600、digest のみ保存、`--rotate` / `--revoke` で失効できる。
-- TLS を先に入れると、内部 CA の発行・配布・更新と Bot 側の信頼設定が増え、配置の手数が増える。
-
-ただし次のいずれかに当たる場合は **TLS を有効にしてから公開する**。
-
-1. 管理 API を WireGuard の外（インターネットや共用 LAN）から届く場所に置く。
-2. 同じホストに信頼できない tenant のコンテナを載せる（同一ホスト内の平文が見えるため）。
-3. 監査や契約上、VPN 内でも TLS が要求される。
-
-TLS は実装済みで、証明書を渡すだけで切り替わる。
-
-```
-cua-bots-service --state <state> --bind <wg address> --allow-remote --port 7717 \
-  --tls-cert <cert.pem> --tls-key <key.pem>
+```text
+Mac/iPhone -> https://bots.dokodemo-dev.internal:7717
+                  |  (CoreDNS がハブの WG アドレスを返す)
+                  v
+             ハブの WG アドレス:7717  (systemd-socket-proxyd の TCP 中継)
+                  |  (TLS はそのまま通る)
+                  v
+             cua-vps の WG アドレス:7717  cua-bots-service が TLS 終端
 ```
 
-- 証明書の SAN に WG アドレス（またはその DNS 名）を入れる。`https://` で接続する。
-- クライアントは CA を信頼する設定が要る（Pi なら `NODE_EXTRA_CA_CERTS`）。
-- 証明書と鍵は 0600 で、`cua-bots` ユーザーだけが読める場所に置く。
-- TLS 1.2 以上のみ受け付ける。
-- TLS なしで `--allow-remote` を付けると、起動ログに警告が1行出る（`serving <addr> over plain HTTP: ...`）。
-  受け入れ時にログを確認し、共有ホスト・VPN 外公開では TLS を有効にする。
+- 証明書は VPN 専用 CA（`vpn-dokodemo-dev internal CA`）が発行する。この CA は
+  `nameConstraints` で `.dokodemo-dev.internal` に限定しているため、IP SAN は発行できない。
+  名前で接続する。
+- サーバー鍵は cua-vps で生成し、外へ出さない。CSR だけを管理端末へ渡して署名する。
+  CA 秘密鍵は Passman にあり、VPS へ置かない。
+- 証明書と鍵は `/etc/cua-bots/tls/`（鍵 0640、`cua-bots`）。systemd の drop-in で
+  `--tls-cert` / `--tls-key` を渡す。
+- 証明書の有効期間は 365 日。更新は 4.5.1 の手順で行う。
+
+### 4.5.1 証明書の更新
+
+```sh
+# cua-vps: 鍵と CSR（鍵は現地生成。既存があれば作り直さない）
+sudo install -d -o cua-bots -g cua-bots -m 0750 /etc/cua-bots/tls
+sudo openssl req -newkey rsa:2048 -sha256 -nodes \
+  -keyout /etc/cua-bots/tls/server.key -out /etc/cua-bots/tls/server.csr \
+  -subj "/CN=bots.dokodemo-dev.internal/O=dokodemo-dev"
+sudo chown cua-bots:cua-bots /etc/cua-bots/tls/server.key /etc/cua-bots/tls/server.csr
+sudo chmod 0640 /etc/cua-bots/tls/server.key
+```
+
+```sh
+# 管理端末: CSR に署名（CA 鍵は Passman から実行時だけ取り出す）
+cat > server.ext <<'EXT'
+[v3_req]
+subjectAltName = DNS:bots.dokodemo-dev.internal
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth
+EXT
+openssl x509 -req -in server.csr -CA vpn-dns-ca.crt -CAkey <ca-key> \
+  -CAcreateserial -out server.crt -days 365 -sha256 \
+  -extfile server.ext -extensions v3_req
+openssl verify -purpose sslserver -verify_hostname bots.dokodemo-dev.internal \
+  -CAfile vpn-dns-ca.crt server.crt
+```
+
+署名した `server.crt` だけを cua-vps の `/etc/cua-bots/tls/` へ置き、サービスを再起動する。
+
+### 4.5.2 クライアント
+
+- Mac: VPN CA（`vpn-dns-ca.crt`）を Keychain の「システム」へ信頼登録する。ブラウザと
+  `curl` はこれで通る。Node.js は OS のストアを見ないので `NODE_EXTRA_CA_CERTS` を使う。
+- iPhone: VPN CA をプロファイルで信頼し、WireGuard の設定で DNS にハブの WG アドレスを
+  指定する。ハブの CoreDNS は `.dokodemo-dev.internal` を権威応答し、それ以外は NextDNS へ
+  転送するので外部名も引ける。アプリは `https://bots.dokodemo-dev.internal:7717` を使う。
+- `cua-bots-open` は `https://bots.dokodemo-dev.internal:7717/ui?login=<token>` を開く。
 
 ## 5. Mac から届かせる（ハブ中継）
 
