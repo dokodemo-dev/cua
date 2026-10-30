@@ -7,6 +7,8 @@ import Foundation
 public enum EngineUpdate: Equatable, Sendable {
     /// The assistant's text for `turn` so far (the whole turn, not a delta).
     case assistant(turn: UInt32, text: String)
+    /// A new text fragment; accumulated by the store so it survives reconnects.
+    case assistantDelta(turn: UInt32, text: String)
     /// A tool the harness is running ("Run tests", "Open browser").
     case tool(turn: UInt32, title: String)
     case turnStarted
@@ -54,6 +56,9 @@ public protocol BotEngine: AnyObject {
     /// Pause: stop work and suspend the Space where the runtime supports it.
     func pause(_ bot: Bot) async throws
     func resume(_ bot: Bot) async throws
+
+    /// Stop only the run, preserving its Space, memory and outputs.
+    func stop(_ bot: Bot) async throws
 
     /// Delete the run and the Space.
     func reset(_ bot: Bot) async throws

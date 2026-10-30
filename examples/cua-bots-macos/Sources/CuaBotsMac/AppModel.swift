@@ -2,9 +2,11 @@
 // Copyright (c) 2026 Cua AI, Inc.
 
 import AppKit
+import Combine
 import Cua
 import CuaBotsCore
 import CuaBotsCua
+import CuaLocalization
 import CuaSpaces
 import CuaSpacesFFI
 import CuaSpacesStreaming
@@ -13,20 +15,33 @@ import SwiftUI
 import UserNotifications
 
 struct BotDraft {
-    var step = 0
-    var name = ""
-    var avatar = AvatarConfig(color: .sky, eyes: .star, ears: .scalloped)
-    var harness: Harness = .hermes
-    var placement: Placement = .local
-    var customizedLook = false
+  var step = 0
+  var name = ""
+  var avatar = AvatarConfig(color: .sky, eyes: .star, ears: .scalloped)
+  var harness: Harness = .pi
+  var runtime = BotRuntime()
+  var placement: Placement = .local
+  var customizedLook = false
+  /// Create the Bot inside a Space that already exists instead of a new one.
+  var useExistingSpace = false
+  var existingSpaceID = ""
+  var existingSpaceName = ""
+  var existingTrustGroup = "default"
+  var existingWorkingDirectory = ""
+}
+
+struct ExistingSpaceInfo: Identifiable, Hashable {
+  var id: String
+  var name: String
+  var location: String
 }
 
 enum Route: Hashable {
-    case bot(String)
-    case scheduled
-    case approvals
-    case outputs
-    case newBot
+  case bot(String)
+  case scheduled
+  case approvals
+  case outputs
+  case newBot
 }
 
 /// Everything the window shows, and the one place the Cua pieces are wired:
@@ -34,219 +49,292 @@ enum Route: Hashable {
 /// and host access.
 @MainActor
 final class AppModel: ObservableObject, Notifier {
-    let store: BotStore
-    let engine: CuaEngine?
-    let clock: RoutineClock
-    let keyvault: KeyvaultBridge
-    let host: HostAccessBridge
-    let remote: RemoteBridge?
+  let store: BotStore
+  let harnesses = HarnessDescriptor.catalog(json: agentHarnesses())
+  let engine: CuaEngine?
+  let clock: RoutineClock
+  let keyvault: KeyvaultBridge
+  let host: HostAccessBridge
+  let remote: RemoteBridge?
 
-    @Published var route: Route = .newBot
-    @Published var draft = BotDraft()
-    @Published var showProfile = true
-    @Published var showComputer = false
-    @Published var editingAvatar = false
-    @Published var editingRule: CustomRule?
-    @Published var showingRules = false
-    @Published var showingMemory = false
-    @Published var signInFor: ApprovalRequest?
-    @Published var confirmReset: Bot?
-    @Published var pairing: Bot?
-    @Published var toast: BotNotification?
-    @Published var openOutput: String?
-    @Published var systemNotifications = UNAuthorizationStatus.notDetermined
-    @Published var streams: [String: LiveStreamSession] = [:]
-    @Published var engineError: String?
-    let pips = PiPControllers()
+  @Published var route: Route = .newBot
+  @Published var draft = BotDraft()
+  @Published var existingSpaces: [ExistingSpaceInfo] = []
+  @Published var loadingExistingSpaces = false
+  @Published var showProfile = true
+  @Published var showComputer = false
+  @Published var editingAvatar = false
+  @Published var editingRule: CustomRule?
+  @Published var showingRules = false
+  @Published var showingMemory = false
+  @Published var signInFor: ApprovalRequest?
+  @Published var confirmReset: Bot?
+  @Published var pairing: Bot?
+  @Published var toast: BotNotification?
+  @Published var openOutput: String?
+  @Published var systemNotifications = UNAuthorizationStatus.notDetermined
+  @Published var streams: [String: LiveStreamSession] = [:]
+  @Published var engineError: String?
+  let pips = PiPControllers()
 
-    private var cancellable: AnyCancellable?
+  @Published var languagePreference = DisplayLanguage.load()
+  func displayText(_ key: String, _ args: [String: String] = [:]) -> String {
+    Translator(preference: languagePreference).text(key, args)
+  }
+  func setDisplayLanguage(_ value: String) throws {
+    try DisplayLanguage.save(value)
+    languagePreference = value
+  }
 
-    init() {
-        let env = ProcessInfo.processInfo.environment
-        // From $HOME, not FileManager's lookup (which reads the account
-        // database), so a run with a scratch HOME keeps everything in it.
-        let home = env["HOME"].map(URL.init(fileURLWithPath:)) ?? FileManager.default.homeDirectoryForCurrentUser
-        let support = home.appendingPathComponent("Library/Application Support/Cua Bots")
-        let cuaHome = env["CUA_HOME"] ?? home.appendingPathComponent(".cua").path
-        let dataDir = env["CUA_BOTS_DATA_DIR"].map(URL.init(fileURLWithPath:)) ?? support
-        let volumeRoot = env["CUA_BOTS_VOLUME"].map(URL.init(fileURLWithPath:)) ?? support.appendingPathComponent("Volume")
-        let volume = LocalVolume(root: volumeRoot)
+  private var cancellable: AnyCancellable?
 
-        var engine: CuaEngine?
-        // Persistent agents, the Cua Volume, teleport and the Keyvault for the
-        // runtime this app embeds (the Cua Spaces extensions). Before the
-        // first `Cua`.
-        cuaSpacesRegister()
-        do {
-            let cua = env["CUA_BOTS_SPACES"] == "daemon" ? try Cua.connect(address: nil, token: nil)
-                                                        : try Cua.embedded()
-            engine = CuaEngine(cua: cua)
-        } catch {
-            engineError = "Couldn't start the Cua runtime: \(error.localizedDescription)"
+  init() {
+    let env = ProcessInfo.processInfo.environment
+    // From $HOME, not FileManager's lookup (which reads the account
+    // database), so a run with a scratch HOME keeps everything in it.
+    let home =
+      env["HOME"].map(URL.init(fileURLWithPath:)) ?? FileManager.default.homeDirectoryForCurrentUser
+    let support = home.appendingPathComponent("Library/Application Support/Cua Bots")
+    let cuaHome = env["CUA_HOME"] ?? home.appendingPathComponent(".cua").path
+    let dataDir = env["CUA_BOTS_DATA_DIR"].map(URL.init(fileURLWithPath:)) ?? support
+    let volumeRoot =
+      env["CUA_BOTS_VOLUME"].map(URL.init(fileURLWithPath:))
+      ?? support.appendingPathComponent("Volume")
+    let volume = LocalVolume(root: volumeRoot)
+
+    var engine: CuaEngine?
+    // Persistent agents, the Cua Volume, teleport and the Keyvault for the
+    // runtime this app embeds (the Cua Spaces extensions). Before the
+    // first `Cua`.
+    cuaSpacesRegister()
+    do {
+      let cua =
+        env["CUA_BOTS_SPACES"] == "daemon"
+        ? try Cua.connect(address: nil, token: nil)
+        : try Cua.embedded()
+      engine = CuaEngine(cua: cua)
+    } catch {
+      engineError = "Couldn't start the Cua runtime: \(error.localizedDescription)"
+    }
+    // Optional: hand each Bot a credential for the local service. Off unless
+    // the service URL and the admin credential file are configured.
+    if let engine, let url = env["CUA_BOTS_SERVICE_URL"],
+      let adminFile = env["CUA_BOTS_ADMIN_FILE"],
+      let base = URL(string: url),
+      let admin = try? String(contentsOfFile: adminFile, encoding: .utf8)
+        .trimmingCharacters(in: .whitespacesAndNewlines),
+      let broker = try? HTTPCredentialBroker(baseURL: base, adminValue: admin)
+    {
+      engine.serviceAPIURL = env["CUA_BOTS_SERVICE_ADVERTISE"] ?? url
+      engine.credentialBroker = broker
+    }
+    self.engine = engine
+    store = BotStore(volume: volume, dataDirectory: dataDir, engine: engine)
+    clock = RoutineClock(fileURL: dataDir.appendingPathComponent("routines.json"), store: store)
+    keyvault = KeyvaultBridge(cuaHome: cuaHome)
+    keyvault.engine = engine
+    host = HostAccessBridge(cuaHome: cuaHome)
+    let st = store
+    remote = engine.map { RemoteBridge(store: st, engine: $0) }
+    store.notifier = self
+    store.signIn = keyvault
+    if let first = store.bots.first { route = .bot(first.id) }
+    cancellable = store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+    store.reconnect()
+    clock.start()
+    remote?.start()
+    Task {
+      await keyvault.refresh()
+      await host.refresh()
+      await refreshNotificationStatus()
+    }
+  }
+
+  var selectedBot: Bot? {
+    if case .bot(let id) = route { return store.bot(id) }
+    return nil
+  }
+
+  func lastActive(_ id: String) -> Date? {
+    store.messages(for: id).last { $0.role == .bot }?.date
+  }
+
+  // MARK: - Notifications
+
+  /// System notifications need a bundled app; `CUA_BOTS_SYSTEM_NOTIFICATIONS=0`
+  /// keeps them in the window only.
+  var canUseSystemNotifications: Bool {
+    Bundle.main.bundleIdentifier != nil
+      && ProcessInfo.processInfo.environment["CUA_BOTS_SYSTEM_NOTIFICATIONS"] != "0"
+  }
+
+  func refreshNotificationStatus() async {
+    guard canUseSystemNotifications else { return }
+    systemNotifications = await UNUserNotificationCenter.current().notificationSettings()
+      .authorizationStatus
+  }
+
+  func enableNotifications() async {
+    guard canUseSystemNotifications else { return }
+    _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [
+      .alert, .sound, .badge,
+    ])
+    await refreshNotificationStatus()
+  }
+
+  func post(_ notification: BotNotification, bot: Bot) {
+    withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) { toast = notification }
+    let id = notification.id
+    Task {
+      try? await Task.sleep(for: .seconds(6))
+      if toast?.id == id { withAnimation(.easeIn(duration: 0.15)) { toast = nil } }
+    }
+    guard canUseSystemNotifications, systemNotifications == .authorized else { return }
+    let content = UNMutableNotificationContent()
+    content.title = notification.title
+    content.body = notification.body
+    content.threadIdentifier = bot.id
+    UNUserNotificationCenter.current().add(
+      UNNotificationRequest(identifier: notification.id, content: content, trigger: nil))
+  }
+
+  // MARK: - Actions
+
+  func createBot(
+    name: String, avatar: AvatarConfig, harness: Harness, placement: Placement,
+    runtime: BotRuntime? = nil
+  ) {
+    Task {
+      let bot = await store.createBot(
+        name: name, avatar: avatar, harness: harness, placement: placement, runtime: runtime)
+      route = .bot(bot.id)
+    }
+    route = .bot(Bot.agentName(for: name))
+  }
+
+  func createFromDraft() {
+    let d = draft
+    draft = BotDraft()
+    let name = d.name.trimmingCharacters(in: .whitespaces)
+    guard d.useExistingSpace, !d.existingSpaceID.isEmpty else {
+      createBot(
+        name: name, avatar: d.avatar, harness: d.harness,
+        placement: d.placement, runtime: d.runtime)
+      return
+    }
+    let group = d.existingTrustGroup.trimmingCharacters(in: .whitespaces)
+    let assignment = ExistingSpaceAssignment(
+      spaceID: d.existingSpaceID,
+      targetID: "space:\(d.existingSpaceID)",
+      targetName: d.existingSpaceName.isEmpty ? d.existingSpaceID : d.existingSpaceName,
+      trustGroup: group.isEmpty ? "default" : group,
+      workingDirectory: d.existingWorkingDirectory.trimmingCharacters(in: .whitespaces))
+    Task {
+      let bot = await store.createBot(
+        name: name, avatar: d.avatar, harness: d.harness, placement: d.placement,
+        runtime: d.runtime, existingSpace: assignment)
+      route = .bot(bot.id)
+    }
+    route = .bot(Bot.agentName(for: name))
+  }
+
+  /// Spaces the SDK knows about, so a Bot can join one that already exists.
+  func loadExistingSpaces() {
+    guard let engine else { return }
+    loadingExistingSpaces = true
+    Task {
+      defer { loadingExistingSpaces = false }
+      do {
+        let spaces = try await engine.cua.spaces().list()
+        existingSpaces =
+          spaces
+          .map { ExistingSpaceInfo(id: $0.id, name: $0.name, location: $0.provider) }
+          .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+      } catch {
+        engineError = error.localizedDescription
+      }
+    }
+  }
+
+  func send(_ text: String) {
+    guard let bot = selectedBot else { return }
+    Task { await store.send(bot.id, text) }
+  }
+
+  func decide(_ approval: ApprovalRequest, _ approve: Bool) {
+    if case .login = approval.source, approve {
+      signInFor = approval
+      return
+    }
+    Task { await store.decide(approval.id, approve: approve) }
+  }
+
+  func togglePause(_ bot: Bot) {
+    Task { bot.isPaused ? await store.resume(bot.id) : await store.pause(bot.id) }
+  }
+
+  func reset(_ bot: Bot) {
+    Task {
+      if let stream = streams[bot.id] {
+        Task { await stream.stop() }
+      }
+      streams[bot.id] = nil
+      await store.reset(bot.id)
+      route = store.bots.first.map { .bot($0.id) } ?? .newBot
+    }
+  }
+
+  // MARK: - Computer
+
+  /// The bot's live screen, opened once and shared by the pane and PiP.
+  func stream(for bot: Bot) async -> LiveStreamSession? {
+    if let s = streams[bot.id] { return s }
+    guard let engine, bot.spaceID != nil else { return nil }
+    do {
+      let space = try await engine.streamSpace(bot)
+      let session = LiveStreamSession(space: space)
+      streams[bot.id] = session
+      await session.start()
+      return session
+    } catch {
+      store.lastError = "Couldn't open \(bot.computerTitle): \(error.localizedDescription)"
+      return nil
+    }
+  }
+
+  func popOut(_ bot: Bot) {
+    Task {
+      guard let s = await stream(for: bot) else { return }
+      pips.controller(for: bot.id).popOut(session: s, interactive: true)
+    }
+  }
+
+  // MARK: - This Mac
+
+  func setHostAccess(_ bot: Bot, allow: Bool) {
+    Task {
+      do {
+        if allow {
+          try await host.allow()
+          store.setHostAccess(bot.id, .allowed(machine: host.machineName))
+        } else {
+          try await host.revoke()
+          store.setHostAccess(bot.id, .off)
         }
-        self.engine = engine
-        store = BotStore(volume: volume, dataDirectory: dataDir, engine: engine)
-        clock = RoutineClock(fileURL: dataDir.appendingPathComponent("routines.json"), store: store)
-        keyvault = KeyvaultBridge(cuaHome: cuaHome)
-        keyvault.engine = engine
-        host = HostAccessBridge(cuaHome: cuaHome)
-        let st = store
-        remote = engine.map { RemoteBridge(store: st, engine: $0) }
-        store.notifier = self
-        store.signIn = keyvault
-        if let first = store.bots.first { route = .bot(first.id) }
-        cancellable = store.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
-        store.reconnect()
-        clock.start()
-        remote?.start()
-        Task {
-            await keyvault.refresh()
-            await host.refresh()
-            await refreshNotificationStatus()
-        }
+      } catch {
+        store.lastError = error.localizedDescription
+      }
     }
-
-    var selectedBot: Bot? {
-        if case .bot(let id) = route { return store.bot(id) }
-        return nil
-    }
-
-    func lastActive(_ id: String) -> Date? {
-        store.messages(for: id).last { $0.role == .bot }?.date
-    }
-
-    // MARK: - Notifications
-
-    /// System notifications need a bundled app; `CUA_BOTS_SYSTEM_NOTIFICATIONS=0`
-    /// keeps them in the window only.
-    var canUseSystemNotifications: Bool {
-        Bundle.main.bundleIdentifier != nil
-            && ProcessInfo.processInfo.environment["CUA_BOTS_SYSTEM_NOTIFICATIONS"] != "0"
-    }
-
-    func refreshNotificationStatus() async {
-        guard canUseSystemNotifications else { return }
-        systemNotifications = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-    }
-
-    func enableNotifications() async {
-        guard canUseSystemNotifications else { return }
-        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-        await refreshNotificationStatus()
-    }
-
-    func post(_ notification: BotNotification, bot: Bot) {
-        withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) { toast = notification }
-        let id = notification.id
-        Task {
-            try? await Task.sleep(for: .seconds(6))
-            if toast?.id == id { withAnimation(.easeIn(duration: 0.15)) { toast = nil } }
-        }
-        guard canUseSystemNotifications, systemNotifications == .authorized else { return }
-        let content = UNMutableNotificationContent()
-        content.title = notification.title
-        content.body = notification.body
-        content.threadIdentifier = bot.id
-        UNUserNotificationCenter.current().add(
-            UNNotificationRequest(identifier: notification.id, content: content, trigger: nil))
-    }
-
-    // MARK: - Actions
-
-    func createBot(name: String, avatar: AvatarConfig, harness: Harness, placement: Placement) {
-        Task {
-            let bot = await store.createBot(name: name, avatar: avatar, harness: harness, placement: placement)
-            route = .bot(bot.id)
-        }
-        route = .bot(Bot.agentName(for: name))
-    }
-
-    func createFromDraft() {
-        let d = draft
-        draft = BotDraft()
-        createBot(name: d.name.trimmingCharacters(in: .whitespaces), avatar: d.avatar, harness: d.harness,
-                  placement: d.placement)
-    }
-
-    func send(_ text: String) {
-        guard let bot = selectedBot else { return }
-        Task { await store.send(bot.id, text) }
-    }
-
-    func decide(_ approval: ApprovalRequest, _ approve: Bool) {
-        if case .login = approval.source, approve {
-            signInFor = approval
-            return
-        }
-        Task { await store.decide(approval.id, approve: approve) }
-    }
-
-    func togglePause(_ bot: Bot) {
-        Task { bot.isPaused ? await store.resume(bot.id) : await store.pause(bot.id) }
-    }
-
-    func reset(_ bot: Bot) {
-        Task {
-            streams[bot.id].map { s in Task { await s.stop() } }
-            streams[bot.id] = nil
-            await store.reset(bot.id)
-            route = store.bots.first.map { .bot($0.id) } ?? .newBot
-        }
-    }
-
-    // MARK: - Computer
-
-    /// The bot's live screen, opened once and shared by the pane and PiP.
-    func stream(for bot: Bot) async -> LiveStreamSession? {
-        if let s = streams[bot.id] { return s }
-        guard let engine, bot.spaceID != nil else { return nil }
-        do {
-            let space = try await engine.streamSpace(bot)
-            let session = LiveStreamSession(space: space)
-            streams[bot.id] = session
-            await session.start()
-            return session
-        } catch {
-            store.lastError = "Couldn't open \(bot.computerTitle): \(error.localizedDescription)"
-            return nil
-        }
-    }
-
-    func popOut(_ bot: Bot) {
-        Task {
-            guard let s = await stream(for: bot) else { return }
-            pips.controller(for: bot.id).popOut(session: s, interactive: true)
-        }
-    }
-
-    // MARK: - This Mac
-
-    func setHostAccess(_ bot: Bot, allow: Bool) {
-        Task {
-            do {
-                if allow {
-                    try await host.allow()
-                    store.setHostAccess(bot.id, .allowed(machine: host.machineName))
-                } else {
-                    try await host.revoke()
-                    store.setHostAccess(bot.id, .off)
-                }
-            } catch {
-                store.lastError = error.localizedDescription
-            }
-        }
-    }
+  }
 }
 
 @MainActor
 final class PiPControllers {
-    private var controllers: [String: StreamPiPController] = [:]
-    func controller(for id: String) -> StreamPiPController {
-        if let c = controllers[id] { return c }
-        let c = StreamPiPController()
-        controllers[id] = c
-        return c
-    }
+  private var controllers: [String: StreamPiPController] = [:]
+  func controller(for id: String) -> StreamPiPController {
+    if let c = controllers[id] { return c }
+    let c = StreamPiPController()
+    controllers[id] = c
+    return c
+  }
 }
-
-import Combine

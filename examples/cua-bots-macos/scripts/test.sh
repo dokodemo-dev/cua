@@ -14,5 +14,19 @@ if [[ "$(uname)" == Darwin ]] && ! xcodebuild -version >/dev/null 2>&1 && [[ -d 
   extra=(-Xswiftc -F -Xswiftc "$clt/Frameworks" -Xlinker -F -Xlinker "$clt/Frameworks"
     -Xlinker -rpath -Xlinker "$clt/Frameworks" -Xlinker -rpath -Xlinker "$clt/usr/lib")
 fi
+# Core/UI tests do not require the native SDK or a VM.
+if [[ "${1:-}" == --core-only ]]; then
+  shift
+  root="$PWD"
+  scratch=$(mktemp -d)
+  trap 'rm -rf "$scratch"' EXIT
+  mkdir -p "$scratch/Sources" "$scratch/Tests"
+  cp "$root/Tests/CorePackage.swift" "$scratch/Package.swift"
+  ln -s "$root/Sources/CuaBotsCore" "$scratch/Sources/CuaBotsCore"
+  ln -s "$root/Sources/CuaBotsUI" "$scratch/Sources/CuaBotsUI"
+  ln -s "$root/Tests/CuaBotsCoreTests" "$scratch/Tests/CuaBotsCoreTests"
+  swift test --package-path "$scratch" ${extra[@]+"${extra[@]}"} "$@"
+  exit $?
+fi
 # ${extra[@]+...}: bash 3.2 (macOS) treats an empty array as unset under set -u.
 exec swift test ${extra[@]+"${extra[@]}"} "$@"

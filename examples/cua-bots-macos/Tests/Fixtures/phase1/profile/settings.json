@@ -1,0 +1,9 @@
+{
+  "defaultProvider": "phase1",
+  "defaultModel": "test-model",
+  "defaultProjectTrust": "always",
+  "enableInstallTelemetry": false,
+  "enableAnalytics": false,
+  "retry": { "enabled": false },
+  "quietStartup": true
+}

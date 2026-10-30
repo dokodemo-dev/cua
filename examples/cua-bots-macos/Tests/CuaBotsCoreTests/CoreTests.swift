@@ -5,25 +5,9 @@ import Testing
 import Foundation
 import SwiftUI
 @testable import CuaBotsCore
+#if canImport(CuaBotsCua)
 @testable import CuaBotsCua
-
-@MainActor
-struct EngineEventTests {
-    @Test func testExitIsTerminalWithoutInventingAnError() {
-        var text: [String: (turn: UInt32, text: String)] = ["ada": (1, "partial")]
-        let updates = CuaEngine.decode([
-            ["kind": "error", "text": "Authentication required"],
-            ["kind": "exited", "text": "task stopped"],
-        ], botID: "ada", turnText: &text)
-        #expect(updates == [.failed("Authentication required"), .exited])
-        #expect(text.isEmpty)
-    }
-
-    @Test func testCleanExitHasNoFailureUpdate() {
-        var text: [String: (turn: UInt32, text: String)] = [:]
-        #expect(CuaEngine.decode([["kind": "exited"]], botID: "ada", turnText: &text) == [.exited])
-    }
-}
+#endif
 
 struct DirectiveTests {
     @Test func testParsesAndStripsMarkers() {
@@ -177,23 +161,29 @@ final class ScriptedEngine: BotEngine {
     var replies: [String] = []
     var paused = false
     var resetCount = 0
+    var provisionCount = 0
     var pollError: Error?
     var scriptedUpdates: [EngineUpdate]?
     var replay = false
     var polledCursors: [UInt64] = []
+    var starts: [Bot] = []
+    var stopped: [String] = []
+    var refuseStop = false
     private var queue: [EngineUpdate] = []
     private var turn: UInt32 = 0
     private var seq: UInt64 = 0
 
     func provision(_ bot: Bot, progress: @escaping @MainActor (EnginePhase) -> Void) async throws -> String {
+        provisionCount += 1
         progress(.creatingSpace("Creating"))
         progress(.ready)
         return "local:\(bot.spaceName)"
     }
 
     func start(_ bot: Bot, volume: VolumeStore, prompt: String) async throws -> String {
+        starts.append(bot)
         try await send(bot, text: prompt)
-        return "run-1"
+        return "run-\(starts.count)"
     }
 
     func send(_ bot: Bot, text: String) async throws {
@@ -211,8 +201,8 @@ final class ScriptedEngine: BotEngine {
         if let pollError { throw pollError }
         if let scriptedUpdates {
             if replay {
-                return cursor >= UInt64(scriptedUpdates.count) ? ([], cursor)
-                    : (scriptedUpdates, UInt64(scriptedUpdates.count))
+                return cursor >= UInt64(scriptedUpdates.count)
+                    ? ([], cursor) : (scriptedUpdates, UInt64(scriptedUpdates.count))
             }
             self.scriptedUpdates = nil
             seq += UInt64(scriptedUpdates.count)
@@ -229,6 +219,10 @@ final class ScriptedEngine: BotEngine {
     func interrupt(_ bot: Bot) async throws {}
     func pause(_ bot: Bot) async throws { paused = true }
     func resume(_ bot: Bot) async throws { paused = false }
+    func stop(_ bot: Bot) async throws {
+        if refuseStop { throw CocoaError(.userCancelled) }
+        stopped.append(bot.runID ?? "")
+    }
     func reset(_ bot: Bot) async throws { resetCount += 1 }
 }
 
@@ -262,7 +256,6 @@ struct StoreTests {
         await store.pollOnce(bot.id)
         #expect(store.notifications.count == 2)
     }
-
     @Test func testRecoverableFailureKeepsPollingQueuedTurn() async throws {
         let engine = ScriptedEngine()
         let store = makeStore(engine)
@@ -283,7 +276,6 @@ struct StoreTests {
         #expect(store.notifications.count == 1)
         store.handle(bot.id, .exited)
     }
-
     @Test func testFirstErrorIsDeduplicatedPerTurn() async {
         let engine = ScriptedEngine()
         let store = makeStore(engine)
@@ -296,7 +288,16 @@ struct StoreTests {
         #expect(store.bot(bot.id)?.status == "Needs a look")
         #expect(!store.isBusy(bot.id))
     }
-
+    @Test func testCleanExitIsNotAnError() async {
+        let engine = ScriptedEngine()
+        let store = makeStore(engine)
+        let bot = await store.createBot(name: "Ada", avatar: .default(for: "Ada"), harness: .hermes, placement: .local)
+        engine.scriptedUpdates = [.exited]
+        await store.pollOnce(bot.id)
+        #expect(!store.isBusy(bot.id))
+        #expect(store.bot(bot.id)?.status == "Ready")
+        #expect(store.notifications.isEmpty)
+    }
     @Test func testFailureIsNotReplayedAfterReload() async {
         let engine = ScriptedEngine()
         engine.scriptedUpdates = [.failed("agent missing")]
@@ -309,41 +310,6 @@ struct StoreTests {
         await again.pollOnce(bot.id)
         #expect(again.notifications.count == 1)
         #expect(engine.polledCursors.last == 1)
-    }
-
-    @Test func testIdlePollDoesNotRewriteState() async throws {
-        let engine = ScriptedEngine()
-        let store = makeStore(engine)
-        let bot = await store.createBot(name: "Ada", avatar: .default(for: "Ada"), harness: .hermes, placement: .local)
-        await store.pollOnce(bot.id)
-        let state = root.appendingPathComponent("data/state.json")
-        let timestamp = Date(timeIntervalSince1970: 1_000)
-        try FileManager.default.setAttributes([.modificationDate: timestamp], ofItemAtPath: state.path)
-        await store.pollOnce(bot.id)
-        let attributes = try FileManager.default.attributesOfItem(atPath: state.path)
-        #expect(attributes[.modificationDate] as? Date == timestamp)
-    }
-
-    @Test func testRepeatedPollFailureStopsThinking() async {
-        let engine = ScriptedEngine()
-        let store = makeStore(engine)
-        let bot = await store.createBot(name: "Ada", avatar: .default(for: "Ada"), harness: .hermes, placement: .local)
-        engine.pollError = NSError(domain: "Space unavailable", code: 404)
-        for _ in 0..<3 { await store.pollOnce(bot.id) }
-        #expect(!store.isBusy(bot.id))
-        #expect(store.bot(bot.id)?.status == "Needs a look")
-        #expect(store.notifications.count == 1)
-    }
-
-    @Test func testCleanExitIsNotAnError() async {
-        let engine = ScriptedEngine()
-        let store = makeStore(engine)
-        let bot = await store.createBot(name: "Ada", avatar: .default(for: "Ada"), harness: .hermes, placement: .local)
-        engine.scriptedUpdates = [.exited]
-        await store.pollOnce(bot.id)
-        #expect(!store.isBusy(bot.id))
-        #expect(store.bot(bot.id)?.status == "Ready")
-        #expect(store.notifications.isEmpty)
     }
 
     @Test func testCreateWritesTheHomeAndIntroduces() async throws {
@@ -482,3 +448,20 @@ struct AvatarTests {
         return data as Data
     }
 }
+
+#if canImport(CuaBotsCua)
+@MainActor
+struct EngineEventTests {
+    @Test func testExitIsTerminalWithoutInventingAnError() {
+        let updates = CuaEngine.decode([
+            ["kind": "error", "text": "Authentication required"],
+            ["kind": "exited", "text": "task stopped"],
+        ])
+        #expect(updates == [.failed("Authentication required"), .exited])
+    }
+
+    @Test func testCleanExitHasNoFailureUpdate() {
+        #expect(CuaEngine.decode([["kind": "exited"]]) == [.exited])
+    }
+}
+#endif

@@ -23,9 +23,13 @@ let package = Package(
         .library(name: "CuaBotsCore", targets: ["CuaBotsCore"]),
         .library(name: "CuaBotsUI", targets: ["CuaBotsUI"]),
         .executable(name: "CuaBots", targets: ["CuaBots"]),
+        .executable(name: "cua-bots-scheduler", targets: ["CuaBotsScheduler"]),
+        .executable(name: "cua-bots-service", targets: ["CuaBotsService"]),
+        .executable(name: "cua-bots-run", targets: ["CuaBotsRunner"]),
     ],
     dependencies: [
         .package(path: "../../libs/spaces-sdk-swift"),
+        .package(path: "../../libs/cua-localization"),
         .package(name: "Cua", path: "../../libs/cua/swift"),
         .package(name: "CuaSpacesApp", path: "../../libs/spaces-app-swift"),
     ],
@@ -46,14 +50,36 @@ let package = Package(
         .executableTarget(
             name: "CuaBots",
             dependencies: ["CuaBotsCore", "CuaBotsUI", "CuaBotsCua",
+                           .product(name: "CuaLocalization", package: "cua-localization"),
                            .product(name: "CuaSpaces", package: "spaces-sdk-swift"),
                            .product(name: "CuaSpacesStreaming", package: "CuaSpacesApp"),
                            .product(name: "CuaSpacesFFI", package: "CuaSpacesApp"),
                            .product(name: "Cua", package: "Cua")],
             path: "Sources/CuaBotsMac"
         ),
+        .executableTarget(
+            name: "CuaBotsScheduler", dependencies: ["CuaBotsCore"],
+            path: "Sources/CuaBotsScheduler"
+        ),
+        .executableTarget(
+            name: "CuaBotsService", dependencies: ["CuaBotsCore"],
+            path: "Sources/CuaBotsService"
+        ),
+        .executableTarget(
+            name: "CuaBotsRunner", dependencies: ["CuaBotsCore", "CuaBotsCua"],
+            path: "Sources/CuaBotsRunner"
+        ),
         .testTarget(name: "CuaBotsCoreTests", dependencies: ["CuaBotsCore", "CuaBotsUI", "CuaBotsCua"],
                     path: "Tests/CuaBotsCoreTests"),
+        .testTarget(
+            name: "CuaBotsCuaIntegrationTests",
+            dependencies: [
+                "CuaBotsCore",
+                "CuaBotsCua",
+                .product(name: "Cua", package: "Cua"),
+            ],
+            path: "Tests/CuaBotsCuaIntegrationTests"
+        ),
     ],
     swiftLanguageModes: [.v5]
 )

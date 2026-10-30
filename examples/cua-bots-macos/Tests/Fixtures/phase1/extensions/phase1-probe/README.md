@@ -1,0 +1,3 @@
+# Phase 1 acceptance probe
+
+Test-only extension for the SDK-pinned Pi 0.87.1. It registers `phase1_probe`, which writes one marker inside the isolated working directory and returns that marker to the local mock provider. There are no settings, UI, timers, network requests, or credentials. It works in RPC mode and is not installed on the host. Load it from the guest project's `.pi/extensions/phase1-probe/index.ts` before starting a fresh run. The companion `phase1-probe` skill scripts its invocation; verify both the tool result and the marker file. Never install this fixture into a user's normal profile.

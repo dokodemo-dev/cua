@@ -27,6 +27,7 @@ public protocol SignInBroker: AnyObject {
 @MainActor
 public final class BotStore: ObservableObject {
     @Published public private(set) var bots: [Bot] = []
+    @Published public private(set) var executions = ExecutionRegistry()
     @Published public private(set) var messages: [String: [ChatMessage]] = [:]
     @Published public private(set) var tasks: [String: [BotTask]] = [:]
     @Published public private(set) var rules: [String: [CustomRule]] = [:]
@@ -50,6 +51,10 @@ public final class BotStore: ObservableObject {
     private var pollers: [String: Task<Void, Never>] = [:]
     private var currentTask: [String: String] = [:]
     private var busy: Set<String> = []
+    private var changing: Set<String> = []
+    private var polling: Set<String> = []
+    /// Turns that ended in a failure: the next message polls instead of
+    /// inventing a new turn, and a clean exit does not report success.
     private var failedTurns: Set<String> = []
     private var pollFailures: [String: Int] = [:]
 
@@ -72,7 +77,7 @@ public final class BotStore: ObservableObject {
     }
     public func approval(_ id: String) -> ApprovalRequest? { approvals.first { $0.id == id } }
     public var unreadCount: Int { notifications.filter { !$0.read }.count }
-    public func isBusy(_ id: String) -> Bool { busy.contains(id) }
+    public func isBusy(_ id: String) -> Bool { busy.contains(id) || changing.contains(id) }
 
     /// The bot's memory file, as the Volume has it.
     public func memory(for id: String) -> String {
@@ -90,12 +95,30 @@ public final class BotStore: ObservableObject {
     /// start its agent, which introduces itself.
     @discardableResult
     public func createBot(name: String, avatar: AvatarConfig, harness: Harness,
-                          placement: Placement) async -> Bot {
-        var bot = Bot(name: name, avatar: avatar, harness: harness, placement: placement)
+                          placement: Placement, runtime: BotRuntime? = nil,
+                          existingSpace: ExistingSpaceAssignment? = nil) async -> Bot {
+        var bot = Bot(name: name, avatar: avatar, harness: harness, placement: placement, runtime: runtime)
         var n = 2
         while bots.contains(where: { $0.id == bot.id }) {
             bot.id = Bot.agentName(for: "\(name)-\(n)")
             n += 1
+        }
+        if var existingSpace {
+            if existingSpace.workingDirectory.trimmingCharacters(in: .whitespaces).isEmpty {
+                existingSpace.workingDirectory = "/home/cua/bots/\(bot.id)"
+            }
+            do {
+                try attach(bot.id, to: existingSpace)
+            } catch {
+                lastError = "Can't use that Space: \(error)"
+                return bot
+            }
+            bot.spaceID = existingSpace.spaceID
+            bot.executionTargetID = existingSpace.targetID
+            bot.trustGroup = existingSpace.trustGroup
+            var runtime = bot.runtime ?? BotRuntime()
+            runtime.workingDirectory = existingSpace.workingDirectory
+            bot.runtime = runtime
         }
         bots.append(bot)
         rules[bot.id] = CustomRule.defaults
@@ -107,6 +130,30 @@ public final class BotStore: ObservableObject {
         return self.bot(bot.id) ?? bot
     }
 
+    /// Register the target, reuse or create the shared binding, then assign.
+    /// The Bot is not added to the store when this throws.
+    private func attach(_ botID: String, to assignment: ExistingSpaceAssignment) throws {
+        var next = executions
+        if next.targets[assignment.targetID] == nil {
+            try next.addTarget(ExecutionTarget(
+                id: assignment.targetID, name: assignment.targetName, kind: .local))
+        }
+        if let binding = next.bindings[assignment.spaceID] {
+            guard binding.targetID == assignment.targetID,
+                  binding.trustGroup == assignment.trustGroup else {
+                throw ExecutionRegistryError.trustGroupMismatch
+            }
+        } else {
+            try next.addBinding(SpaceBinding(
+                spaceID: assignment.spaceID, targetID: assignment.targetID, mode: .shared,
+                managedByApp: false, trustGroup: assignment.trustGroup))
+        }
+        try next.assign(
+            botID: botID, spaceID: assignment.spaceID,
+            workingDirectory: assignment.workingDirectory, trustGroup: assignment.trustGroup)
+        executions = next
+    }
+
     static func introPrompt(_ bot: Bot) -> String {
         "You were just created. Introduce yourself to \(bot.owner) in two short sentences as \(bot.name): "
             + "say you have your own computer, you'll keep working when they're away, and you'll check in "
@@ -114,20 +161,40 @@ public final class BotStore: ObservableObject {
     }
 
     private func bringUp(_ id: String, firstPrompt: String) async {
-        guard let engine, var bot = bot(id) else { return }
+        guard let engine, var bot = bot(id), !changing.contains(id) else { return }
+        changing.insert(id)
+        defer { changing.remove(id) }
         do {
+            try bot.runtime?.validate()
             update(id) { $0.status = "Setting up"; $0.mood = .working }
-            let space = try await engine.provision(bot) { [weak self] phase in
-                guard let self else { return }
-                switch phase {
-                case .creatingSpace(let s): self.setupPhase[id] = s
-                case .startingAgent: self.setupPhase[id] = "Starting \(bot.harness.name)"
-                case .ready: self.setupPhase[id] = nil
+            let space: String
+            if let existing = bot.spaceID {
+                space = existing
+            } else {
+                space = try await engine.provision(bot) { [weak self] phase in
+                    guard let self else { return }
+                    switch phase {
+                    case .creatingSpace(let s): self.setupPhase[id] = s
+                    case .startingAgent: self.setupPhase[id] = "Starting \(bot.harness.name)"
+                    case .ready: self.setupPhase[id] = nil
+                    }
                 }
             }
             update(id) { $0.spaceID = space }
             bot = self.bot(id) ?? bot
+            if bot.executionTargetID == nil {
+                let targetID = "local"
+                if executions.targets[targetID] == nil {
+                    try executions.addTarget(ExecutionTarget(id: targetID, name: bot.placement.name, kind: bot.placement == .local ? .local : .legacyCloud))
+                }
+                try executions.addBinding(SpaceBinding(spaceID: space, targetID: targetID, mode: .exclusive, managedByApp: true, trustGroup: bot.effectiveTrustGroup))
+                try executions.assign(botID: id, spaceID: space, workingDirectory: bot.runtime?.workingDirectory.isEmpty == false ? bot.runtime!.workingDirectory : "/home/cua/bots/\(id)", trustGroup: bot.effectiveTrustGroup)
+                update(id) { $0.executionTargetID = targetID }
+                bot = self.bot(id) ?? bot
+            }
             let run = try await engine.start(bot, volume: volume, prompt: firstPrompt)
+            cursors[id] = nil
+            turnText[id] = nil
             update(id) { $0.runID = run; $0.status = "Thinking"; $0.mood = .thinking }
             setupPhase[id] = nil
             busy.insert(id)
@@ -145,6 +212,48 @@ public final class BotStore: ObservableObject {
     }
 
     // MARK: - Customizing
+
+    /// Settings apply to a new run, never to an old harness session.
+    @discardableResult
+    public func configure(_ id: String, harness: Harness, runtime: BotRuntime) async -> Bool {
+        guard let bot = bot(id), !busy.contains(id), !changing.contains(id), setupPhase[id] == nil else {
+            lastError = "Wait for the bot's current turn to finish."
+            return false
+        }
+        do {
+            try runtime.validate()
+            if bot.harness == harness && (bot.runtime ?? BotRuntime()) == runtime { return true }
+            changing.insert(id)
+            defer { changing.remove(id) }
+            if bot.runID != nil {
+                guard let engine else { throw CocoaError(.featureUnsupported) }
+                try await engine.stop(bot)
+            }
+            pollers[id]?.cancel()
+            pollers[id] = nil
+            cursors[id] = nil
+            turnText[id] = nil
+            update(id) {
+                $0.harness = harness
+                $0.runtime = runtime
+                $0.runID = nil
+                $0.mood = $0.isPaused ? .paused : .idle
+                $0.status = "Settings saved; send a message to start"
+            }
+            if let changed = self.bot(id) { writeHome(changed) }
+            save()
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Release background pollers without interrupting guest sessions.
+    public func disconnect() {
+        for poller in pollers.values { poller.cancel() }
+        pollers.removeAll()
+    }
 
     public func updateAvatar(_ id: String, _ avatar: AvatarConfig) {
         update(id) { $0.avatar = avatar }
@@ -191,6 +300,10 @@ public final class BotStore: ObservableObject {
         if failedTurns.contains(id) { await pollOnce(id) }
         failedTurns.remove(id)
         pollFailures[id] = 0
+        guard !changing.contains(id) else {
+            lastError = "Wait for the bot's settings or startup operation to finish."
+            return
+        }
         do {
             if bot.runID == nil {
                 await bringUp(id, firstPrompt: text)
@@ -255,10 +368,63 @@ public final class BotStore: ObservableObject {
         public var errorDescription: String? { "Saved sign-ins aren't available here." }
     }
 
+    // The service is the intended owner of these mutations. Never expose these
+    // methods directly to an untrusted Bot without an authorization check.
+    public func registerTarget(_ target: ExecutionTarget) throws {
+        try executions.addTarget(target)
+        save()
+    }
+
+    public func registerBinding(_ binding: SpaceBinding) throws {
+        try executions.addBinding(binding)
+        save()
+    }
+
+    @discardableResult
+    public func assign(_ id: String, to spaceID: String, workingDirectory: String) async -> Bool {
+        guard let bot = bot(id), !isBusy(id), setupPhase[id] == nil else {
+            lastError = "Wait for the bot's current operation to finish."
+            return false
+        }
+        changing.insert(id)
+        defer { changing.remove(id) }
+        do {
+            var next = executions
+            if let old = bot.spaceID { _ = try next.detach(botID: id, spaceID: old) }
+            try next.assign(botID: id, spaceID: spaceID, workingDirectory: workingDirectory, trustGroup: bot.effectiveTrustGroup)
+            guard let binding = next.bindings[spaceID] else { throw ExecutionRegistryError.unknownSpace }
+            guard let engine else { throw CocoaError(.featureUnsupported) }
+            if bot.runID != nil { try await engine.stop(bot) }
+            pollers[id]?.cancel()
+            pollers[id] = nil
+            cursors[id] = nil
+            turnText[id] = nil
+            executions = next
+            update(id) {
+                $0.executionTargetID = binding.targetID
+                $0.spaceID = spaceID
+                $0.runID = nil
+                var runtime = $0.runtime ?? BotRuntime()
+                runtime.workingDirectory = workingDirectory
+                $0.runtime = runtime
+                $0.status = "Execution target saved; send a message to start"
+                $0.mood = $0.isPaused ? .paused : .idle
+            }
+            if let updated = self.bot(id) { writeHome(updated) }
+            save()
+            return true
+        } catch { lastError = error.localizedDescription; return false }
+    }
+
+    private func ownsExclusiveSpace(_ bot: Bot) -> Bool {
+        guard let id = bot.spaceID, let binding = executions.bindings[id] else { return false }
+        return binding.managedByApp && binding.mode == .exclusive && binding.botIDs == [bot.id]
+    }
+
     // MARK: - Pause, resume, reset
 
     public func pause(_ id: String) async {
-        guard let bot = bot(id), !bot.isPaused else { return }
+        guard let bot = bot(id), !bot.isPaused, !changing.contains(id) else { return }
         update(id) { $0.isPaused = true; $0.mood = .paused; $0.status = "Paused" }
         pollers[id]?.cancel()
         pollers[id] = nil
@@ -268,13 +434,17 @@ public final class BotStore: ObservableObject {
                 list[i].state = .paused
             }
         }
-        do { try await engine?.pause(bot) } catch { lastError = error.localizedDescription }
+        do {
+            if ownsExclusiveSpace(bot) { try await engine?.pause(bot) }
+            else { try await engine?.interrupt(bot) }
+        } catch { lastError = error.localizedDescription }
         save()
     }
 
     public func resume(_ id: String) async {
-        guard let bot = bot(id), bot.isPaused else { return }
-        do { try await engine?.resume(bot) } catch { lastError = error.localizedDescription }
+        guard let bot = bot(id), bot.isPaused, !changing.contains(id) else { return }
+        do { if ownsExclusiveSpace(bot) { try await engine?.resume(bot) } }
+        catch { lastError = error.localizedDescription; return }
         update(id) { $0.isPaused = false; $0.mood = .idle; $0.status = "Ready" }
         setTasks(id) { list in
             for i in list.indices where list[i].state == .paused { list[i].state = .scheduled }
@@ -285,10 +455,32 @@ public final class BotStore: ObservableObject {
 
     /// Delete the bot: its run, Space, conversation, memory and schedule.
     public func reset(_ id: String) async {
-        guard let bot = bot(id) else { return }
+        guard let bot = bot(id), !changing.contains(id) else { return }
         pollers[id]?.cancel()
         pollers[id] = nil
-        do { try await engine?.reset(bot) } catch { lastError = error.localizedDescription }
+        changing.insert(id)
+        defer { changing.remove(id) }
+        do {
+            var next = executions
+            let effect: ExecutionRegistry.DetachEffect
+            if let spaceID = bot.spaceID, next.bindings[spaceID] != nil {
+                effect = try next.detach(botID: id, spaceID: spaceID)
+            } else { effect = .preserve }
+            if effect == .deleteOwnedSpace {
+                guard let engine else { throw CocoaError(.featureUnsupported) }
+                try await engine.reset(bot)
+                if let spaceID = bot.spaceID { try next.confirmOwnedSpaceDeleted(spaceID) }
+            } else if bot.runID != nil {
+                guard let engine else { throw CocoaError(.featureUnsupported) }
+                try await engine.stop(bot)
+            }
+            executions = next
+        } catch { lastError = error.localizedDescription; return }
+        cursors[id] = nil
+        turnText[id] = nil
+        currentTask[id] = nil
+        busy.remove(id)
+        setupPhase[id] = nil
         try? volume.delete(VolumeLayout.home(id))
         bots.removeAll { $0.id == id }
         messages[id] = nil
@@ -325,7 +517,7 @@ public final class BotStore: ObservableObject {
     /// Run a scheduled task now: the routine clock calls this. A paused or
     /// busy bot refuses rather than interrupts.
     public func fire(taskID: String, botID: String, now: Date = Date()) async -> Bool {
-        guard let bot = bot(botID), !bot.isPaused, !busy.contains(botID),
+        guard let bot = bot(botID), !bot.isPaused, !isBusy(botID),
               let task = tasks(for: botID).first(where: { $0.id == taskID }) else { return false }
         setTasks(botID) { list in
             if let i = list.firstIndex(where: { $0.id == taskID }) {
@@ -370,11 +562,15 @@ public final class BotStore: ObservableObject {
     @discardableResult
     public func pollOnce(_ id: String) async -> Bool {
         guard let engine, let bot = bot(id), bot.runID != nil else { return true }
+        guard polling.insert(id).inserted else { return !busy.contains(id) }
+        defer { polling.remove(id) }
         do {
             let (updates, cursor) = try await engine.poll(bot, cursor: cursors[id] ?? 0)
+            guard !Task.isCancelled, self.bot(id)?.runID == bot.runID, !changing.contains(id) else { return true }
+            for u in updates { handle(id, u) }
             cursors[id] = cursor
             pollFailures[id] = 0
-            for u in updates { handle(id, u) }
+            save()
         } catch {
             // A poll that fails once is not news; the next one retries.
             pollFailures[id, default: 0] += 1
@@ -392,6 +588,9 @@ public final class BotStore: ObservableObject {
             failedTurns.remove(id)
             busy.insert(id)
             self.update(id) { $0.mood = .thinking; $0.status = "Thinking" }
+        case .assistantDelta(let turn, let chunk):
+            let previous = turnText[id].flatMap { $0.turn == turn ? $0.text : nil } ?? ""
+            handle(id, .assistant(turn: turn, text: previous + chunk))
         case .assistant(let turn, let text):
             turnText[id] = (turn, text)
             // Live status from the markers seen so far.
@@ -404,9 +603,11 @@ public final class BotStore: ObservableObject {
         case .turnEnded(let turn):
             busy.remove(id)
             if failedTurns.contains(id) {
+                // The turn already failed: its text is not an answer.
                 turnText[id] = nil
             } else {
-                let text = turnText[id].flatMap { $0.turn == turn ? $0.text : nil } ?? turnText[id]?.text ?? ""
+                let text =
+                    turnText[id].flatMap { $0.turn == turn ? $0.text : nil } ?? turnText[id]?.text ?? ""
                 turnText[id] = nil
                 finishTurn(id, text)
                 if let b = bot(id), let engine {
@@ -422,7 +623,6 @@ public final class BotStore: ObservableObject {
             pollers[id] = nil
             if !failedTurns.contains(id) { finishTurn(id, "") }
         }
-        save()
     }
 
     /// A finished turn: show the text, act on the markers.
@@ -617,12 +817,22 @@ public final class BotStore: ObservableObject {
         }
     }
 
+    struct RunRecovery: Codable {
+        var runID: String
+        var cursor: UInt64
+        var turn: UInt32?
+        var text: String?
+        var busy: Bool
+        var taskID: String?
+    }
+
     struct Saved: Codable {
         var messages: [String: [ChatMessage]]
         var approvals: [ApprovalRequest]
         var notifications: [BotNotification]
         var bots: [Bot]
-        var cursors: [String: UInt64]?
+        var recovery: [String: RunRecovery]? = nil
+        var executions: ExecutionRegistry? = nil
     }
 
     var stateURL: URL { dataDirectory.appendingPathComponent("state.json") }
@@ -630,7 +840,16 @@ public final class BotStore: ObservableObject {
     public func save() {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
-        let saved = Saved(messages: messages, approvals: approvals, notifications: notifications, bots: bots, cursors: cursors)
+        var recovery: [String: RunRecovery] = [:]
+        for bot in bots {
+            guard let runID = bot.runID else { continue }
+            recovery[bot.id] = RunRecovery(
+                runID: runID, cursor: cursors[bot.id] ?? 0,
+                turn: turnText[bot.id]?.turn, text: turnText[bot.id]?.text,
+                busy: busy.contains(bot.id), taskID: currentTask[bot.id])
+        }
+        let saved = Saved(messages: messages, approvals: approvals, notifications: notifications,
+                          bots: bots, recovery: recovery, executions: executions)
         if let data = try? e.encode(saved) { try? data.write(to: stateURL, options: .atomic) }
         for bot in bots { try? volume.writeJSON(bot, VolumeLayout.identity(bot.id)) }
     }
@@ -639,11 +858,13 @@ public final class BotStore: ObservableObject {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         var runtime: [String: Bot] = [:]
+        var recovery: [String: RunRecovery] = [:]
         if let data = try? Data(contentsOf: stateURL), let saved = try? d.decode(Saved.self, from: data) {
             messages = saved.messages
             approvals = saved.approvals
             notifications = saved.notifications
-            cursors = saved.cursors ?? [:]
+            recovery = saved.recovery ?? [:]
+            executions = saved.executions ?? ExecutionRegistry()
             for b in saved.bots { runtime[b.id] = b }
         }
         // The Volume is the source of truth for which bots exist.
@@ -654,11 +875,21 @@ public final class BotStore: ObservableObject {
             if let live = runtime[id] { bot.runID = live.runID ?? bot.runID; bot.spaceID = live.spaceID ?? bot.spaceID }
             return bot
         }.sorted { $0.createdAt < $1.createdAt }
+        for i in bots.indices where bots[i].executionTargetID == nil {
+            do { try executions.migrate(&bots[i]) }
+            catch { lastError = "Execution target migration needs attention: \(error)" }
+        }
         for bot in bots {
             if bot.mood == .error { failedTurns.insert(bot.id) }
             rules[bot.id] = (try? volume.readJSON([CustomRule].self, "agents/\(bot.id)/identity/rules.json"))
                 ?? CustomRule.defaults
             tasks[bot.id] = (try? volume.readJSON([BotTask].self, VolumeLayout.tasks(bot.id))) ?? []
+            if let state = recovery[bot.id], state.runID == bot.runID {
+                cursors[bot.id] = state.cursor
+                if let turn = state.turn, let text = state.text { turnText[bot.id] = (turn, text) }
+                if state.busy && !bot.isPaused { busy.insert(bot.id) }
+                currentTask[bot.id] = state.taskID
+            }
         }
     }
 }

@@ -3,6 +3,7 @@
 
 import AppKit
 import CuaBotsCore
+import CuaLocalization
 import SwiftUI
 
 @main
@@ -25,16 +26,19 @@ struct CuaBotsApp: App {
         .defaultSize(width: 1280, height: 800)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Bot") { model.route = .newBot }.keyboardShortcut("n")
+                Button(model.displayText("New Bot")) { model.route = .newBot }.keyboardShortcut("n")
             }
             CommandMenu("Bot") {
-                Button("Open Computer") { model.showComputer = true }
+                Button(model.displayText("Open Computer")) { model.showComputer = true }
                     .keyboardShortcut("k").disabled(model.selectedBot?.spaceID == nil)
-                Button("Pause or Resume") { if let b = model.selectedBot { model.togglePause(b) } }
+                Button(model.displayText("Pause or Resume")) { if let b = model.selectedBot { model.togglePause(b) } }
                     .keyboardShortcut("p", modifiers: [.command, .shift]).disabled(model.selectedBot == nil)
-                Button("Show Profile") { model.showProfile.toggle() }
+                Button(model.displayText("Show Profile")) { model.showProfile.toggle() }
                     .keyboardShortcut("i").disabled(model.selectedBot == nil)
             }
+        }
+        Settings {
+            LanguageSettingsView().environmentObject(model)
         }
     }
 }
