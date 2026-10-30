@@ -50,7 +50,7 @@ async function failureRun(t, { request = "return new Promise(() => {});", config
   fs.writeFileSync(path.join(run, "run.json"), JSON.stringify({ cwd: run, agent: {command: process.execPath, args: ["-e", agent]}, startupTimeoutMs: 1000, ...config }));
   fs.writeFileSync(path.join(run, "state.json"), JSON.stringify(previous));
   fs.writeFileSync(path.join(run, "agent.log"), log);
-  fs.writeFileSync(path.join(run, "secrets.json"), JSON.stringify({ TOKEN: "secret-12345678" }));
+  fs.writeFileSync(path.join(run, "secrets.json"), JSON.stringify({ TOKEN: "test-placeholder" }));
   const child = spawn(process.execPath, [path.join(root, "runner.mjs"), run], {stdio: ["ignore", "ignore", "pipe"], detached: true});
   const kill = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
   t.after(kill);
@@ -70,7 +70,7 @@ for (const [name, options, expected] of [
   ["initialize timeout", {config: {startupTimeoutMs: 100}}, /timed out.*initialize/],
   ["session timeout", {request: "if (method === 'initialize') return {}; return new Promise(() => {});", config: {startupTimeoutMs: 100}}, /timed out.*session/],
   ["authentication timeout", {request: "if (method === 'initialize') return {authMethods: [{id: 'login'}]}; return new Promise(() => {});", config: {authMethod: "login", startupTimeoutMs: 100}}, /timed out.*authenticate/],
-  ["ACP structured error", {request: "while (!(await import('node:fs')).readFileSync(process.argv[2] + '/agent.log', 'utf8').includes('current launch')) await new Promise(r => setTimeout(r, 10)); throw Object.assign(new Error('internal error secret-12345678'), {code: -32603, data: {cause: 'adapter unavailable'}});", agent: "console.error('discarded prefix' + 'x'.repeat(10000) + 'current launch'); setInterval(() => {}, 1000)", config: {startupTimeoutMs: 1000}, log: "old launch\n"}, /-32603[\s\S]*adapter unavailable[\s\S]*current launch/],
+  ["ACP structured error", {request: "while (!(await import('node:fs')).readFileSync(process.argv[2] + '/agent.log', 'utf8').includes('current launch')) await new Promise(r => setTimeout(r, 10)); throw Object.assign(new Error('internal error test-placeholder'), {code: -32603, data: {cause: 'adapter unavailable'}});", agent: "console.error('discarded prefix' + 'x'.repeat(10000) + 'current launch'); setInterval(() => {}, 1000)", config: {startupTimeoutMs: 1000}, log: "old launch\n"}, /-32603[\s\S]*adapter unavailable[\s\S]*current launch/],
   ["authentication required", {request: "if (method === 'initialize') return {agentCapabilities: {mcpCapabilities: {http: true}}}; throw Object.assign(new Error('Authentication required'), {code: -32000});", config: {authHint: "Run ~/.cua/bin/claude inside this bot's Space", mcpServers: [{type: "http", name: "test", url: "http://localhost"}]}}, /Authentication required[\s\S]*~\/\.cua\/bin\/claude.*Space/],
 ]) {
   test(name + " is diagnostic and terminal", {timeout: 6000}, async (t) => {
@@ -80,7 +80,7 @@ for (const [name, options, expected] of [
     assert.match(errors[0].message, expected);
     assert.equal(events.filter(e => e.type === "run_exited").length, 1);
     assert.equal(state.status, "failed");
-    assert.equal(JSON.stringify({events, state}).includes("secret-12345678"), false);
+    assert.equal(JSON.stringify({events, state}).includes("test-placeholder"), false);
     assert.equal(errors[0].message.includes("old launch"), false);
     assert.equal(errors[0].message.includes("discarded prefix"), false);
     assert.ok(errors[0].message.length < 6000);

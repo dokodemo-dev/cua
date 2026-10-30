@@ -1,6 +1,24 @@
 {
   "_note": "Pinned, verified installables for sandboxes. Every archive (a release tarball, zip, or an app's own .deb payload) carries the sha256 its publisher lists (source); npm packages carry the registry's sha512 integrity for the pinned tarball; hermes is pinned to a commit and installed with its own frozen uv.lock. Checked 2026-09-24.",
   "items": {
+    "deepseek-harness": {
+      "name": "DeepSeek Harness (dsh) and its ACP app",
+      "kind": "npm",
+      "version": "0.2.1-rc.2",
+      "license": "MIT",
+      "source": "https://registry.npmjs.org/@deepseek-ai/dsh/0.2.1-rc.2",
+      "packages": [
+        {
+          "name": "@deepseek-ai/dsh",
+          "version": "0.2.1-rc.2",
+          "tarball": "https://registry.npmjs.org/@deepseek-ai/dsh/-/dsh-0.2.1-rc.2.tgz",
+          "integrity": "sha512-tvY+yhfKRifthbqPe/OK0AYxM5ZkvqfYq/jMYgJcEUxiRRL1Vwra3Ti5TB6AXgSWQdiPHYh/Vp6SJa9yHwMNuw=="
+        }
+      ],
+      "bins": {
+        "dsh": "node_modules/.bin/dsh"
+      }
+    },
     "node": {
       "name": "Node.js",
       "kind": "archive",

@@ -161,6 +161,10 @@ pub struct RunArgs {
     /// Its wire format: anthropic, openai-responses, openai-chat, gemini.
     #[arg(long)]
     wire: Option<String>,
+    /// An extra request header the endpoint needs, NAME=VALUE (repeatable).
+    /// Never a credential: forward keys with --env-from-host.
+    #[arg(long = "header", value_name = "NAME=VALUE")]
+    headers: Vec<String>,
     /// An MCP server for the agent: NAME=URL (HTTP, as reachable inside the
     /// sandbox) or NAME=cmd:COMMAND ARGS... (stdio, run in the sandbox).
     #[arg(long = "mcp", value_name = "NAME=URL")]
@@ -318,6 +322,19 @@ fn start_args(a: &RunArgs, space: &str) -> Result<serde_json::Value, CuaError> {
             "name": m.name, "url": m.url, "command": m.command, "args": m.args,
         }));
     }
+    let mut headers = serde_json::Map::new();
+    for h in &a.headers {
+        let (name, value) = h
+            .split_once('=')
+            .ok_or_else(|| CuaError::InvalidArgument(format!("--header {h:?} wants NAME=VALUE")))?;
+        let (name, value) = (name.trim(), value.trim());
+        if name.is_empty() || value.is_empty() {
+            return Err(CuaError::InvalidArgument(format!(
+                "--header {h:?} wants NAME=VALUE"
+            )));
+        }
+        headers.insert(name.to_string(), value.to_string().into());
+    }
     Ok(serde_json::json!({
         "space": space,
         "agent": a.harness,
@@ -330,6 +347,7 @@ fn start_args(a: &RunArgs, space: &str) -> Result<serde_json::Value, CuaError> {
         "model": a.model,
         "base_url": a.base_url,
         "wire": a.wire,
+        "headers": headers,
         "mcp_servers": mcp,
         "files": files,
         "sandbox_mcp": !a.no_sandbox_mcp,

@@ -346,6 +346,7 @@ pub fn start_options_with(
         base_url,
         wire,
         model: a.model.clone(),
+        headers: a.headers.clone(),
     });
     let opts = RunOptions {
         cwd: a.cwd.clone(),

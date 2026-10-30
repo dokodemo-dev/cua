@@ -487,6 +487,8 @@ fn run_options(o: AgentRunOptions) -> Result<ca::RunOptions> {
             base_url,
             wire,
             model: o.model.clone(),
+            // The SDK takes no endpoint headers; `agent_start` does.
+            headers: Default::default(),
         }),
         model: o.model,
         install: o.install,

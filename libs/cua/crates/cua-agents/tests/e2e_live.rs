@@ -106,7 +106,12 @@ async fn e2e_harness_runs() {
                 &format!("Write the proof file. mock: think planning the step; plan; say writing the proof; shell echo {id}-proof > proof.txt && cat proof.txt"),
                 RunOptions {
                     env: env_map,
-                    endpoint: Some(Endpoint { base_url: base.clone(), wire: None, model: Some(mock_model(h)) }),
+                    endpoint: Some(Endpoint {
+                        base_url: base.clone(),
+                        wire: None,
+                        model: Some(mock_model(h)),
+                        headers: Default::default(),
+                    }),
                     label: Some("e2e".into()),
                     ..Default::default()
                 },

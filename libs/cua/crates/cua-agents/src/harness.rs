@@ -221,6 +221,27 @@ pub const HARNESSES: &[Harness] = &[
         ],
     },
     Harness {
+        id: "deepseek-harness",
+        name: "DeepSeek Harness",
+        installs: &["deepseek-harness"],
+        acp: &["dsh", "--profile", "acp"],
+        cli: Some("dsh"),
+        keys: &["DEEPSEEK_API_KEY", "OPENAI_API_KEY"],
+        logins: Some(&[]),
+        auth_method: None,
+        wires: &[Wire::OpenaiChat],
+        mode_kinds: FULL,
+        skills_agent: None,
+        sandbox_mcp: true,
+        ready: true,
+        notes: &[
+            "developer preview: dsh breaks compatibility between releases, so the installable is pinned and upgraded deliberately",
+            "the ACP profile keeps its own sandbox and approval presets; runs set DSH_PERMISSION_MODE=danger-full-access because the Space is the boundary",
+            "dsh exposes no ACP mode: the model is fixed by the run's config, and session/set_mode does nothing",
+            "ACP MCP support is HTTP only; stdio MCP servers passed to a run are not started",
+        ],
+    },
+    Harness {
         id: "hermes",
         name: "Hermes",
         installs: &["hermes"],
@@ -311,6 +332,9 @@ pub fn settings_hint(env: &str) -> String {
     match env {
         "ANTHROPIC_API_KEY" => "Add an Anthropic API key in Cua Spaces → Settings → Agents".into(),
         "OPENAI_API_KEY" => "Add an OpenAI API key in Cua Spaces → Settings → Agents".into(),
+        "DEEPSEEK_API_KEY" => {
+            "Add a DeepSeek API key under Other in Cua Spaces → Settings → Agents".into()
+        }
         other => format!("Add {other} under Other in Cua Spaces → Settings → Agents"),
     }
 }
@@ -458,6 +482,11 @@ pub struct Endpoint {
     /// Model id; default: the harness's own default.
     #[serde(default)]
     pub model: Option<String>,
+    /// Extra request headers the endpoint needs (a gateway that routes on
+    /// one, for example `x-opencode-session`). Never a credential: keys go
+    /// in the run's env.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
 }
 
 /// A file the SDK writes into the run directory before launch.
@@ -483,6 +512,18 @@ pub struct Launch {
     /// Shell lines the launcher runs before it starts the agent (linking a
     /// signed-in harness's credentials into a relocated config dir).
     pub prelude: Vec<String>,
+}
+
+/// `headers:` lines for a YAML config, indented under a `headers:` key.
+fn headers_yaml(headers: &BTreeMap<String, String>, indent: usize) -> crate::Result<String> {
+    let pad = " ".repeat(indent);
+    let mut out = format!("{pad}headers:\n");
+    for (k, v) in headers {
+        let key = serde_json::to_string(k)?;
+        let value = serde_json::to_string(v)?;
+        out.push_str(&format!("{pad}  {key}: {value}\n"));
+    }
+    Ok(out)
 }
 
 fn trim_v1(url: &str) -> &str {
@@ -548,6 +589,26 @@ pub fn launch_with_home(
             return Err(crate::Error::Invalid(format!(
                 "{} cannot use a {wire:?} endpoint (it speaks {:?})",
                 h.name, h.wires
+            )));
+        }
+    }
+    // Headers are the endpoint's, not a harness's: only the two harnesses
+    // cua writes a model config for can carry them.
+    let headers = endpoint.map(|e| e.headers.clone()).unwrap_or_default();
+    if !headers.is_empty() && !matches!(h.id, "pi" | "deepseek-harness") {
+        return Err(crate::Error::Invalid(format!(
+            "{} cannot take endpoint headers (only pi and deepseek-harness write a model config cua can extend)",
+            h.name
+        )));
+    }
+    for (k, v) in &headers {
+        let name_ok = !k.is_empty()
+            && k.len() <= 64
+            && k.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+        if !name_ok || v.contains(['\r', '\n']) {
+            return Err(crate::Error::Invalid(format!(
+                "endpoint header {k:?} is not a valid HTTP header",
             )));
         }
     }
@@ -684,9 +745,13 @@ pub fn launch_with_home(
         "pi" => {
             if let Some(b) = &base {
                 let m = model.clone().unwrap_or_else(|| "default".into());
-                let models = json!({"providers": {"cua": {"baseUrl": v1(b),
+                let mut provider = json!({"baseUrl": v1(b),
                     "api": "openai-completions", "apiKey": "${OPENAI_API_KEY}",
-                    "models": [{"id": m}]}}});
+                    "models": [{"id": m}]});
+                if !headers.is_empty() {
+                    provider["headers"] = json!(headers);
+                }
+                let models = json!({"providers": {"cua": provider}});
                 let settings =
                     json!({"defaultProvider": "cua", "defaultModel": m, "quietStartup": true});
                 l.files.push(ConfigFile {
@@ -700,6 +765,56 @@ pub fn launch_with_home(
                 env(&mut l, "PI_CODING_AGENT_DIR", format!("{run_dir}/pi-agent"));
                 env(&mut l, "PI_OFFLINE", "1".into());
             }
+        }
+        "deepseek-harness" => {
+            let dsh_home = match home {
+                Some(h) => format!("{h}/dsh"),
+                None => format!("{run_dir}/dsh-home"),
+            };
+            // dsh keeps providers and the session's model in the acp
+            // profile's patch layer; it has no endpoint or model env var.
+            let mut patch = String::new();
+            if let Some(b) = &base {
+                let m = model.clone().unwrap_or_else(|| "default".into());
+                patch.push_str("- id: llm-pi-ai\n  config:\n    providers:\n      cua:\n");
+                patch.push_str("        apiKeyEnv: OPENAI_API_KEY\n");
+                patch.push_str("        api: openai-completions\n");
+                patch.push_str(&format!(
+                    "        baseURL: {}\n",
+                    serde_json::to_string(&v1(b))?
+                ));
+                if !headers.is_empty() {
+                    patch.push_str(&headers_yaml(&headers, 8)?);
+                }
+                patch.push_str(&format!(
+                    "        models:\n          - id: {}\n",
+                    serde_json::to_string(&m)?
+                ));
+                patch.push_str(&format!(
+                    "- id: acp\n  config:\n    provider: cua\n    model: {}\n",
+                    serde_json::to_string(&m)?,
+                ));
+            } else if let Some(m) = &model {
+                patch.push_str(&format!(
+                    "- id: acp\n  config:\n    model: {}\n",
+                    serde_json::to_string(m)?,
+                ));
+            }
+            if !patch.is_empty() {
+                l.files.push(ConfigFile {
+                    rel: match home {
+                        Some(_) => format!("{dsh_home}/profiles/acp/cordis.patch.yml"),
+                        None => "dsh-home/profiles/acp/cordis.patch.yml".into(),
+                    },
+                    body: patch,
+                });
+            }
+            env(&mut l, "DSH_HOME", dsh_home);
+            // dsh's own sandbox and approvals would nest inside the
+            // Space's; the Space is the boundary, and the runner answers
+            // approval requests.
+            env(&mut l, "DSH_PERMISSION_MODE", "danger-full-access".into());
+            env(&mut l, "DSH_TELEMETRY_MODE", "DISABLED".into());
         }
         "hermes" => {
             let hermes_home = match home {
@@ -883,6 +998,7 @@ mod tests {
             base_url: "http://127.0.0.1:8787/v1".into(),
             wire: None,
             model: Some("m1".into()),
+            ..Default::default()
         };
         let c = launch(harness("claude-code").unwrap(), Some(&e), None, "/r", "/w").unwrap();
         assert!(
@@ -955,6 +1071,7 @@ mod tests {
             base_url: "http://h:1/v1".into(),
             wire: None,
             model: Some("m".into()),
+            ..Default::default()
         };
         let x = launch_with_home(
             harness("openai-codex").unwrap(),
@@ -1118,5 +1235,139 @@ mod tests {
                 .collect();
             assert!(key_check(h, &all, false).is_none(), "{}", h.id);
         }
+    }
+    #[test]
+    fn endpoint_headers_reach_the_two_configs_that_can_carry_them() {
+        let e = Endpoint {
+            base_url: "https://gateway.example/v1".into(),
+            wire: Some(Wire::OpenaiChat),
+            model: Some("m1".into()),
+            headers: [("x-opencode-session".to_string(), "cua-bots".to_string())]
+                .into_iter()
+                .collect(),
+        };
+        let pi = launch(harness("pi").unwrap(), Some(&e), None, "/r", "/w").unwrap();
+        let models: serde_json::Value =
+            serde_json::from_str(&pi.files[0].body).expect("pi models.json");
+        assert_eq!(
+            models["providers"]["cua"]["headers"]["x-opencode-session"],
+            "cua-bots"
+        );
+        // The key stays an env reference.
+        assert_eq!(models["providers"]["cua"]["apiKey"], "${OPENAI_API_KEY}");
+        let dsh = launch(
+            harness("deepseek-harness").unwrap(),
+            Some(&e),
+            None,
+            "/r",
+            "/w",
+        )
+        .unwrap();
+        assert!(
+            dsh.files[0]
+                .body
+                .contains("        headers:\n          \"x-opencode-session\": \"cua-bots\"\n"),
+            "{}",
+            dsh.files[0].body
+        );
+        // A harness whose config cua cannot extend refuses them instead of
+        // silently dropping the header.
+        assert!(launch(harness("claude-code").unwrap(), Some(&e), None, "/r", "/w").is_err());
+        // A header name that is not an HTTP token, or a value with a newline,
+        // never reaches a config file.
+        for (name, value) in [("x session", "cua"), ("x-session", "a\nb")] {
+            let e = Endpoint {
+                headers: [(name.to_string(), value.to_string())]
+                    .into_iter()
+                    .collect(),
+                ..e.clone()
+            };
+            assert!(
+                launch(harness("pi").unwrap(), Some(&e), None, "/r", "/w").is_err(),
+                "{name:?}: {value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn deepseek_harness_configures_its_acp_profile() {
+        let e = Endpoint {
+            base_url: "http://127.0.0.1:8898/v1".into(),
+            wire: Some(Wire::OpenaiChat),
+            model: Some("deepseek-v4-pro".into()),
+            ..Default::default()
+        };
+        let l = launch(
+            harness("deepseek-harness").unwrap(),
+            Some(&e),
+            None,
+            "/r",
+            "/w",
+        )
+        .unwrap();
+        assert!(l.env.contains(&("DSH_HOME".into(), "/r/dsh-home".into())));
+        assert!(
+            l.env
+                .contains(&("DSH_PERMISSION_MODE".into(), "danger-full-access".into()))
+        );
+        assert!(
+            l.env
+                .contains(&("DSH_TELEMETRY_MODE".into(), "DISABLED".into()))
+        );
+        assert_eq!(l.files.len(), 1);
+        assert_eq!(l.files[0].rel, "dsh-home/profiles/acp/cordis.patch.yml");
+        assert!(l.files[0].body.contains("apiKeyEnv: OPENAI_API_KEY"));
+        assert!(
+            l.files[0]
+                .body
+                .contains("baseURL: \"http://127.0.0.1:8898/v1\"")
+        );
+        assert!(
+            l.files[0].body.contains(
+                "- id: acp\n  config:\n    provider: cua\n    model: \"deepseek-v4-pro\""
+            )
+        );
+        // The harness speaks one wire, and refuses the others.
+        let wrong = Endpoint {
+            wire: Some(Wire::Anthropic),
+            ..e
+        };
+        assert!(
+            launch(
+                harness("deepseek-harness").unwrap(),
+                Some(&wrong),
+                None,
+                "/r",
+                "/w",
+            )
+            .is_err()
+        );
+        // Without an endpoint the DeepSeek provider stays, and only the
+        // model is pinned; no provider entry is written.
+        let l2 = launch(
+            harness("deepseek-harness").unwrap(),
+            None,
+            Some("deepseek-v4-flash"),
+            "/r",
+            "/w",
+        )
+        .unwrap();
+        assert!(!l2.files[0].body.contains("llm-pi-ai"));
+        assert!(l2.files[0].body.contains("model: \"deepseek-v4-flash\""));
+        // A persistent home carries the whole dsh home, sessions included.
+        let l3 = launch_with_home(
+            harness("deepseek-harness").unwrap(),
+            None,
+            None,
+            "/r",
+            "/w",
+            Some("/home/cua/agents/ada"),
+        )
+        .unwrap();
+        assert!(
+            l3.env
+                .contains(&("DSH_HOME".into(), "/home/cua/agents/ada/dsh".into()))
+        );
+        assert!(l3.files.is_empty());
     }
 }

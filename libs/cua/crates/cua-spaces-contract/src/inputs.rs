@@ -413,6 +413,12 @@ pub struct AgentStart {
     /// A custom model endpoint base URL (a proxy or compatible server).
     #[serde(default)]
     pub base_url: Option<String>,
+    /// Extra request headers the endpoint needs, for example
+    /// `{"x-opencode-session": "cua"}` on a gateway that routes on one.
+    /// Never a credential: name provider keys in `env_from_host` instead.
+    /// Only `pi` and `deepseek-harness` take them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
     /// Extra MCP servers. The Space's own tools are included unless
     /// `sandbox_mcp` is false.
     #[serde(default)]
