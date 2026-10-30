@@ -2,13 +2,18 @@
 
 #if os(iOS)
 
+import CuaBotsServiceKit
 import SwiftUI
 
 public struct SignInView: View {
     @ObservedObject private var model: PhoneModel
     @State private var link = ""
     @State private var showManual = false
-    @State private var base = ""
+    // Prefilled with the service's VPN name: the certificate the service
+    // presents carries this name and nothing else (the VPN CA's name
+    // constraints rule out an IP address), so typing an address is the
+    // exceptional case now.
+    @State private var base = ServiceEndpoint.defaultBase
     @State private var credential = ""
     @State private var working = false
     @FocusState private var credentialFocused: Bool
@@ -55,7 +60,7 @@ public struct SignInView: View {
 
                 Section {
                     DisclosureGroup("接続先と資格情報を分けて入れる", isExpanded: $showManual) {
-                        TextField("vpn-host:7717", text: $base)
+                        TextField(ServiceEndpoint.defaultBase, text: $base)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .keyboardType(.URL)

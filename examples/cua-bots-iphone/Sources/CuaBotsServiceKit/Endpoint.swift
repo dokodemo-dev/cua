@@ -7,6 +7,11 @@ import Foundation
 /// The service is reached over the VPN, so the address is usually a private
 /// IP. The credential is the same value `cua-bots-open` puts in a link.
 public struct ServiceEndpoint: Sendable, Equatable, Codable {
+    /// The service's address inside the VPN. It is a name, not an address: the
+    /// certificate is issued by the VPN CA, whose name constraints allow only
+    /// `.dokodemo-dev.internal`. The hub's CoreDNS answers it.
+    public static let defaultBase = "https://bots.dokodemo-dev.internal:7717"
+
     public var baseURL: URL
     public var credential: String
 
