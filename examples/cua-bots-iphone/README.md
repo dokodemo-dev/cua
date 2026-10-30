@@ -33,9 +33,15 @@ xcrun devicectl device install app --device <DEVICE_UDID> \
 
 ## サインイン
 
-`cua-bots-open` が作るリンク（`http://<host>:7717/ui?login=...`）を貼るか、
+`cua-bots-open` が作るリンク（`https://bots.dokodemo-dev.internal:7717/ui?login=...`）を貼るか、
 `cuabots-service://?url=...&token=...` を開く。接続先と資格情報を分けて入れることもできる。
 資格情報は Keychain に保存し、サインアウトで消す。
+
+サービスは TLS で待ち受けるので、端末側に 2 つ用意が要る。
+
+- VPN 専用 CA（`vpn-dns-ca.crt`）をプロファイルで信頼する
+- WireGuard の設定で DNS にハブの WG アドレスを指定し、`bots.dokodemo-dev.internal` を
+  引けるようにする（ハブの CoreDNS は内部名だけ権威応答し、他は NextDNS へ転送する）
 
 ## できること
 
