@@ -1,0 +1,8 @@
+.build/
+build-device/
+build/
+build-device/
+DerivedData/
+*.xcodeproj
+App/Info.plist
+.swiftpm/
