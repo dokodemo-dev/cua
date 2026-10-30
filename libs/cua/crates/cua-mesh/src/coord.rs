@@ -223,9 +223,33 @@ pub fn connect_url(base: &str) -> Result<String> {
     Ok(url.to_string())
 }
 
+/// Roots kept out of the bundled list because their operator's keys were
+/// compromised (2026-10 eMudhra incident). Apple's store and Mozilla already
+/// distrust them; the bundled list lags, and a relay connection must not trust
+/// a compromised CA. Matched on the subject name as ASCII inside the DER Name.
+const DISTRUSTED_SUBJECTS: &[&[u8]] = &[
+    b"emSign ECC Root CA - G3",
+    b"AAA Certificate Services",
+];
+
+fn is_distrusted(subject: &[u8]) -> bool {
+    DISTRUSTED_SUBJECTS
+        .iter()
+        .any(|needle| subject.windows(needle.len()).any(|window| window == *needle))
+}
+
+/// The bundled roots a relay connection may use.
+fn bundled_server_roots() -> Vec<rustls::pki_types::TrustAnchor<'static>> {
+    webpki_roots::TLS_SERVER_ROOTS
+        .iter()
+        .filter(|anchor| !is_distrusted(anchor.subject.as_ref()))
+        .cloned()
+        .collect()
+}
+
 fn tls_connector() -> tokio_tungstenite::Connector {
     let mut roots = rustls::RootCertStore::empty();
-    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    roots.extend(bundled_server_roots());
     let cfg = rustls::ClientConfig::builder_with_provider(Arc::new(
         rustls::crypto::ring::default_provider(),
     ))
@@ -577,6 +601,18 @@ pub(crate) mod tokio_util_cancel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_relay_connection_never_trusts_a_compromised_root() {
+        let bundled = webpki_roots::TLS_SERVER_ROOTS.len();
+        let blocked = webpki_roots::TLS_SERVER_ROOTS
+            .iter()
+            .filter(|anchor| is_distrusted(anchor.subject.as_ref()))
+            .count();
+        assert!(blocked > 0, "the compromised roots are present to filter");
+        assert_eq!(bundled_server_roots().len(), bundled - blocked);
+        assert!(bundled_server_roots().iter().all(|a| !is_distrusted(a.subject.as_ref())));
+    }
 
     fn usage(peer: PublicKey, open: u32) -> Vec<PeerUsage> {
         vec![PeerUsage {
