@@ -25,6 +25,19 @@ final class EndpointTests: XCTestCase {
         XCTAssertEqual(endpoint?.credential, "frag")
     }
 
+    /// The TLS switch rewrites only the scheme of a stored http address, so a
+    /// saved sign-in keeps its host, port and credential.
+    func testTLSSchemeUpgradeKeepsHostPortAndCredential() throws {
+        let stored = try XCTUnwrap(
+            ServiceEndpoint.make(base: "http://bots.dokodemo-dev.internal:7717", credential: "token")
+        )
+        var comps = try XCTUnwrap(URLComponents(url: stored.baseURL, resolvingAgainstBaseURL: false))
+        comps.scheme = "https"
+        let upgraded = ServiceEndpoint(baseURL: try XCTUnwrap(comps.url), credential: stored.credential)
+        XCTAssertEqual(upgraded.baseURL.absoluteString, "https://bots.dokodemo-dev.internal:7717")
+        XCTAssertEqual(upgraded.credential, stored.credential)
+    }
+
     func testRefusesALinkWithoutACredential() {
         XCTAssertNil(ServiceEndpoint.parse(link: "http://vpn-host:7717/ui"))
         XCTAssertNil(ServiceEndpoint.parse(link: "ftp://vpn-host/ui?login=x"))
@@ -266,3 +279,4 @@ final class StubProtocol: URLProtocol {
 
     override func stopLoading() {}
 }
+

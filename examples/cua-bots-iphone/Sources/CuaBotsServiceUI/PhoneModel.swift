@@ -54,6 +54,7 @@ public final class PhoneModel: ObservableObject {
 
     private var client: ServiceClient?
     private var cursor = 0
+    private var didTryTLSUpgrade = false
     private var polling: Task<Void, Never>?
 
     public init() {
@@ -140,8 +141,53 @@ public final class PhoneModel: ObservableObject {
             session = try? await client.sessionInfo()
             spaces = (try? await client.spaces())?.spaces ?? spaces
         } catch {
+            // A service that moved to TLS answers a plain HTTP request with 400
+            // ("client sent an HTTP request to an HTTPS server"). Upgrade the
+            // stored address once and retry, so a saved older sign-in keeps
+            // working after the switch.
+            if !didTryTLSUpgrade, await upgradeToTLS() {
+                didTryTLSUpgrade = true
+                await refreshBots()
+                return
+            }
             handle(error)
         }
+    }
+
+    /// Moves a saved plain-HTTP endpoint to TLS. The credential never changes.
+    ///
+    /// Two addresses are tried: the same host over https, and the service's
+    /// name. The name matters because the certificate carries no IP address —
+    /// the VPN CA's name constraints forbid one — so a saved IP address cannot
+    /// verify even when TLS is working.
+    private func upgradeToTLS() async -> Bool {
+        guard let current = endpoint else { return false }
+        var candidates: [ServiceEndpoint] = []
+        if current.baseURL.scheme?.lowercased() == "http",
+           var comps = URLComponents(url: current.baseURL, resolvingAgainstBaseURL: false) {
+            comps.scheme = "https"
+            if let url = comps.url {
+                candidates.append(ServiceEndpoint(baseURL: url, credential: current.credential))
+            }
+        }
+        if let named = ServiceEndpoint.baseAddress(from: ServiceEndpoint.defaultBase),
+           named != current.baseURL {
+            candidates.append(ServiceEndpoint(baseURL: named, credential: current.credential))
+        }
+        for candidateEndpoint in candidates {
+            let candidate = ServiceClient(endpoint: candidateEndpoint)
+            do {
+                try await candidate.health()
+                _ = try await candidate.bots()
+            } catch {
+                continue
+            }
+            endpoint = candidateEndpoint
+            client = candidate
+            CredentialStore.save(candidateEndpoint)
+            return true
+        }
+        return false
     }
 
     private func apply(_ payload: BotsPayload) {
