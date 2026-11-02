@@ -425,6 +425,32 @@ openssl verify -purpose sslserver -verify_hostname bots.dokodemo-dev.internal \
   転送するので外部名も引ける。アプリは `https://bots.dokodemo-dev.internal:7717` を使う。
 - `cua-bots-open` は `https://bots.dokodemo-dev.internal:7717/ui?login=<token>` を開く。
 
+## 4.8 バックアップ
+
+`cua-bots-backup.timer`（毎日 03:30、±5 分）が `/var/lib/cua-bots` と
+`/etc/cua-bots/turn.env` を `/var/backups/cua-bots/` へ tar で残す（root 0600、
+14 世代）。`runs/` は一時状態なので含めない。
+
+```sh
+sudo systemctl list-timers cua-bots-backup.timer
+sudo ls -l /var/backups/cua-bots | tail -3
+sudo /usr/local/libexec/cua-bots-backup   # 手動で 1 回
+```
+
+中身は Bot 定義、トークン、`keys.json`、ルーティン、TLS の鍵を含む。復元するときは
+サービスとスケジューラーを止め、`/` からの相対パスを保ったまま展開する。
+
+```sh
+sudo systemctl stop cua-bots-scheduler cua-bots-service
+sudo tar xzf /var/backups/cua-bots/cua-bots-<stamp>.tar.gz -C /
+sudo systemctl start cua-bots-scheduler cua-bots-service
+```
+
+cua-vps はハブの CoreDNS を使わないため、`/etc/hosts` に
+`<cua-vps の WG アドレス> bots.dokodemo-dev.internal` を置いてある。
+これが無いと、ルーティンの設定取得（`CUA_BOTS_AGENT_URL`）と
+`curl` の確認が名前解決で失敗する。
+
 ## 5. Mac から届かせる（ハブ中継）
 
 ハブは `ip_forward=0` でピア間転送をしないため、Mac から VPS の WG アドレスへ直接は届かない。
