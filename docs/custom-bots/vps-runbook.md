@@ -175,10 +175,15 @@ $S --remove-job <id>                    # 削除（その求人の未配送ス�
 
 サービスは `/ui` で画面を返す。Mac では `cua-bots-open` を実行すると、VPS の
 管理者資格情報でログインリンクを作ってブラウザで開く（`~/.zshrc` の関数）。
-`/ui?login=<資格情報>` は **200 の小さなページ**を返し、その場で `localStorage` に
-控えてから `/ui` へ移る（Cookie も同時に置く）。リダイレクトのフラグメントは落ちる
-ことがあり、Cookie を拒否するブラウザもあるため、ページ自身に書かせるのが確実。
-資格情報は `Authorization` でも送るので、どちらか一方が通れば入れる。
+
+**リンクの資格情報はフラグメントに置く**（`/ui#k=<資格情報>`）。`?login=` はクエリ
+なのでサーバーへ送られ、ブラウザの履歴やアクセスログにも残る。フラグメントは送信されず、
+ページが `localStorage` に控えたあと `history.replaceState` で消す。
+
+`?login=` も互換のため残してある。こちらは **200 の小さなページ**を返し、その場で
+`localStorage` に控えてから `/ui` へ移る（Cookie も同時に置く）。リダイレクトの
+フラグメントは落ちることがあり、Cookie を拒否するブラウザもあるため、ページ自身に
+書かせるのが確実。資格情報は `Authorization` でも送るので、どちらか一方が通れば入れる。
 **ブラウザからのポーリングは 2 秒間隔・タブが隠れている間は停止**。サーバーの制限は
 600 リクエスト/分（60 だと画面が自分の上限に当たり、サインインしていないように見えた）。`/ui?logout=1` は両方を消す。設定タブは `GET /v1/session` で「種類（管理者 / Bot）・
 有効期限・できること」を出す。鍵そのものは返さない。失効したリンクで開いた場合は
@@ -423,7 +428,7 @@ openssl verify -purpose sslserver -verify_hostname bots.dokodemo-dev.internal \
 - iPhone: VPN CA をプロファイルで信頼し、WireGuard の設定で DNS にハブの WG アドレスを
   指定する。ハブの CoreDNS は `.dokodemo-dev.internal` を権威応答し、それ以外は NextDNS へ
   転送するので外部名も引ける。アプリは `https://bots.dokodemo-dev.internal:7717` を使う。
-- `cua-bots-open` は `https://bots.dokodemo-dev.internal:7717/ui?login=<token>` を開く。
+- `cua-bots-open` は `https://bots.dokodemo-dev.internal:7717/ui#k=<token>` を開く。
 
 ## 4.8 バックアップ
 

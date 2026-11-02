@@ -33,7 +33,7 @@ xcrun devicectl device install app --device <DEVICE_UDID> \
 
 ## サインイン
 
-`cua-bots-open` が作るリンク（`https://bots.dokodemo-dev.internal:7717/ui?login=...`）を貼るか、
+`cua-bots-open` が作るリンク（`https://bots.dokodemo-dev.internal:7717/ui#k=...`）を貼るか、
 `cuabots-service://?url=...&token=...` を開く。接続先と資格情報を分けて入れることもできる。
 資格情報は Keychain に保存し、サインアウトで消す。
 

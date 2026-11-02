@@ -106,7 +106,8 @@ go build -o /tmp/cua-bots ./cmd/cua-bots-service
   --turn-command /path/to/turn-script
 ```
 
-`/ui?login=<管理者トークン>` を開くと入れる。`--turn-command` は標準出力を1行ずつ
+`/ui#k=<管理者トークン>` を開くと入れる（資格情報はフラグメントに置くので、query と
+違ってサーバーのログやブラウザの履歴に残らない。`/ui?login=` も互換のため受け付ける）。`--turn-command` は標準出力を1行ずつ
 ターンへ流すので、`echo` するだけのスクリプトでも会話の表示を確認できる。
 
 ### まだ無いもの
