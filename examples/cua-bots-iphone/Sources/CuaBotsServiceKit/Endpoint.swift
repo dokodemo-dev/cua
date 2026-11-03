@@ -20,8 +20,45 @@ public struct ServiceEndpoint: Sendable, Equatable, Codable {
         self.credential = credential
     }
 
-    /// Accepts either the link `cua-bots-open` produces
-    /// (`http://host:7717/ui?login=...`) or `cuabots-service://?url=...&token=...`.
+    /// The pieces of a sign-in link: where the service is and either a
+    /// one-time code (the form `cua-bots-open` hands out now) or a credential
+    /// (the manual form, and links from older versions).
+    public struct Link: Sendable, Equatable {
+        public var base: URL
+        public var code: String?
+        public var credential: String?
+    }
+
+    /// Reads a link without using it: `#c=<code>` needs a trip to the service to
+    /// become a credential, which the caller does asynchronously.
+    public static func parseLink(_ raw: String) -> Link? {
+        let link = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !link.isEmpty, let comps = URLComponents(string: link) else { return nil }
+
+        if comps.scheme == "cuabots-service" {
+            let items = Dictionary(comps.queryItems?.map { ($0.name, $0.value ?? "") } ?? [],
+                                   uniquingKeysWith: { first, _ in first })
+            guard let url = items["url"], let token = items["token"],
+                  let base = baseAddress(from: url) else { return nil }
+            return Link(base: base, code: nil, credential: token)
+        }
+        guard comps.scheme == "http" || comps.scheme == "https",
+              let base = baseAddress(from: link) else { return nil }
+        if let fragment = comps.fragment, fragment.hasPrefix("c=") {
+            let code = String(fragment.dropFirst(2)).removingPercentEncoding ?? ""
+            return code.isEmpty ? nil : Link(base: base, code: code, credential: nil)
+        }
+        var token = comps.queryItems?.first(where: { $0.name == "login" })?.value
+        if token == nil, let fragment = comps.fragment, fragment.hasPrefix("k=") {
+            token = String(fragment.dropFirst(2)).removingPercentEncoding
+        }
+        guard let credential = token, !credential.isEmpty else { return nil }
+        return Link(base: base, code: nil, credential: credential)
+    }
+
+    /// Accepts either a one-time-code link or a link carrying a credential
+    /// (`cuabots-service://?url=...&token=...`). A code link yields nil here; use
+    /// `parseLink` and exchange the code.
     public static func parse(link raw: String) -> ServiceEndpoint? {
         let link = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !link.isEmpty, let comps = URLComponents(string: link) else { return nil }

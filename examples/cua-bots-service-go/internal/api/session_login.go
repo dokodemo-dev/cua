@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -104,6 +105,49 @@ func (s *Service) exchangeLogin(w http.ResponseWriter, r *http.Request, body []b
 	s.setSessionCookie(w, r, token, now)
 	w.Header().Set("Cache-Control", "no-store")
 	return http.StatusNoContent, nil
+}
+
+// deviceLogin answers POST /v1/login/device: the phone trades a one-time code
+// for the credential it keeps in its Keychain. The URL carries only the code, so
+// a link can be handed to an app without putting the long-lived token in it.
+func (s *Service) deviceLogin(w http.ResponseWriter, r *http.Request, body []byte, now time.Time) (int, any) {
+	if !s.limiter.allow("login:"+clientAddr(r), now) {
+		return http.StatusTooManyRequests, map[string]string{"error": "too many attempts"}
+	}
+	var in struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil {
+		return http.StatusBadRequest, map[string]string{"error": "malformed request"}
+	}
+	code := strings.TrimSpace(in.Code)
+	if code == "" {
+		return http.StatusBadRequest, map[string]string{"error": "code is required"}
+	}
+	token, ok := s.codes.consume(code)
+	if !ok {
+		return http.StatusUnauthorized, map[string]string{"error": "this code is no longer valid"}
+	}
+	if s.tokens.Authenticate(token, now) == nil {
+		return http.StatusUnauthorized, map[string]string{"error": "invalid credential"}
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	return http.StatusOK, map[string]string{"token": token}
+}
+
+// sameOrigin reports whether a write came from this very origin. Browsers send
+// Origin on non-GET requests; a client that omits it is not a browser acting on
+// a cookie, so it has nothing to do here.
+func sameOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return false
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" || parsed.Host != r.Host {
+		return false
+	}
+	return parsed.Scheme == "http" || parsed.Scheme == "https"
 }
 
 func clientAddr(r *http.Request) string {

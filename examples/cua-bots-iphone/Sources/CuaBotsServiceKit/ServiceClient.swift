@@ -37,6 +37,45 @@ public struct ServiceClient: Sendable {
 
     // MARK: - Reads
 
+    /// Trades a one-time code for the credential the app keeps. The link only
+    /// ever carries the code, so a copied URL cannot leak a long-lived token.
+    public static func exchangeCode(
+        base: URL,
+        code: String,
+        session: URLSession = ServiceClient.deviceSession()
+    ) async throws -> String {
+        guard let url = URL(string: "/v1/login/device", relativeTo: base) else {
+            throw ServiceError(status: 0, message: "接続先の URL が正しくありません。")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["code": code])
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ServiceError(status: 0, message: "応答を読めませんでした。")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw ServiceError(status: http.statusCode,
+                               message: Self.message(from: data, status: http.statusCode))
+        }
+        struct Answer: Decodable { let token: String }
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: data),
+              !answer.token.isEmpty else {
+            throw ServiceError(status: 0, message: "サインインの応答を読めませんでした。")
+        }
+        return answer.token
+    }
+
+    /// A session for the sign-in call, which has no credential yet.
+    public static func deviceSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }
+
     public func health() async throws {
         _ = try await perform(path: "/v1/health")
     }

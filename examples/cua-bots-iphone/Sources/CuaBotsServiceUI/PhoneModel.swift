@@ -71,16 +71,30 @@ public final class PhoneModel: ObservableObject {
     // MARK: - Session
 
     public func signIn(link: String) async -> Bool {
-        if let parsed = ServiceEndpoint.parse(link: link) {
-            return await connect(parsed)
-        }
-        if let base = ServiceEndpoint.baseAddress(from: link) {
-            prefilledBase = base.absoluteString
-            error = "この URL には資格情報が入っていません。接続先は下に入れました。資格情報だけ入れてください。"
+        guard let pieces = ServiceEndpoint.parseLink(link) else {
+            if let base = ServiceEndpoint.baseAddress(from: link) {
+                prefilledBase = base.absoluteString
+                error = "この URL には資格情報が入っていません。接続先は下に入れました。資格情報だけ入れてください。"
+                return false
+            }
+            error = "リンクの形式が正しくありません。cua-bots-open のリンクか、接続先と資格情報を入れてください。"
             return false
         }
-        error = "リンクの形式が正しくありません。cua-bots-open のリンクか、接続先と資格情報を入れてください。"
-        return false
+        if let credential = pieces.credential {
+            return await connect(ServiceEndpoint(baseURL: pieces.base, credential: credential))
+        }
+        guard let code = pieces.code else { return false }
+        busy = true
+        defer { busy = false }
+        do {
+            // The link carries a one-time code; the service trades it for the
+            // credential this app keeps in the Keychain.
+            let token = try await ServiceClient.exchangeCode(base: pieces.base, code: code)
+            return await connect(ServiceEndpoint(baseURL: pieces.base, credential: token))
+        } catch {
+            self.error = describe(error)
+            return false
+        }
     }
 
     public func signIn(base: String, credential: String) async -> Bool {

@@ -212,6 +212,11 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.deny(w, http.StatusRequestEntityTooLarge, "request body too large", r)
 		return
 	}
+	if r.Method == http.MethodPost && r.URL.Path == "/v1/login/device" {
+		status, payload := s.deviceLogin(w, r, body, now)
+		writeJSON(w, status, payload)
+		return
+	}
 	if r.Method == http.MethodPost && r.URL.Path == "/v1/login/exchange" {
 		status, payload := s.exchangeLogin(w, r, body, now)
 		if status == http.StatusNoContent {
@@ -222,9 +227,19 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := bearer(r)
+	fromCookie := false
 	if token == "" {
 		if c, err := r.Cookie(sessionCookieName); err == nil {
 			token = strings.TrimSpace(c.Value)
+			fromCookie = token != ""
+		}
+	}
+	// A cookie rides along automatically, so a write it authorizes has to come
+	// from this origin. Bearer credentials are explicit and are not checked.
+	if fromCookie && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if !sameOrigin(r) {
+			s.deny(w, http.StatusForbidden, "cross-origin write refused", r)
+			return
 		}
 	}
 	// The health probe needs no token and no budget: a monitor should not be

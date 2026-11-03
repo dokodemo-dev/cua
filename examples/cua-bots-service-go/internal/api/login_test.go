@@ -5,6 +5,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -78,5 +80,60 @@ func TestTheSignInPageCarriesItsPolicy(t *testing.T) {
 		if got == "" || !contains(got, want) {
 			t.Fatalf("%s: %q", header, got)
 		}
+	}
+}
+
+// The phone trades a code for the credential it keeps; the code works once.
+func TestADeviceTradesACodeForTheCredential(t *testing.T) {
+	svc, _, now := chatFixture(t)
+	admin := adminCredential(t, svc, now)
+	rec := chatCall(t, svc, http.MethodPost, "/v1/login/code", admin, "")
+	var issued struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &issued); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"code":"` + issued.Code + `"}`
+	first := chatCall(t, svc, http.MethodPost, "/v1/login/device", "", body)
+	if first.Code != http.StatusOK {
+		t.Fatalf("device: %d %s", first.Code, first.Body)
+	}
+	if !contains(first.Body.String(), `"token":"`+admin+`"`) {
+		t.Fatalf("the answer has no token: %s", first.Body)
+	}
+	if second := chatCall(t, svc, http.MethodPost, "/v1/login/device", "", body); second.Code != http.StatusUnauthorized {
+		t.Fatalf("a code was spent twice: %d", second.Code)
+	}
+}
+
+// A write authorized by the cookie must come from this origin.
+func TestACookieWriteNeedsTheOrigin(t *testing.T) {
+	svc, _, now := chatFixture(t)
+	admin := adminCredential(t, svc, now)
+	cookie := sessionCookie(t, svc, admin)
+
+	call := func(origin string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "/v1/bots/alpha/agent",
+			strings.NewReader(`{"model":"m"}`))
+		req.RemoteAddr = "127.0.0.1:50000"
+		req.Host = "bots.dokodemo-dev.internal:7717"
+		req.AddCookie(cookie)
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		rec := httptest.NewRecorder()
+		svc.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := call(""); rec.Code != http.StatusForbidden {
+		t.Fatalf("a cookie write with no Origin: %d", rec.Code)
+	}
+	if rec := call("https://elsewhere.example"); rec.Code != http.StatusForbidden {
+		t.Fatalf("a cookie write from another origin: %d", rec.Code)
+	}
+	rec := call("https://bots.dokodemo-dev.internal:7717")
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("a same-origin write was refused: %s", rec.Body)
 	}
 }

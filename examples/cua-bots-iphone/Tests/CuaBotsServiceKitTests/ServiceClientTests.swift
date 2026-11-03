@@ -4,6 +4,18 @@ import XCTest
 @testable import CuaBotsServiceKit
 
 final class EndpointTests: XCTestCase {
+    /// The link `cua-bots-open` hands out now carries a one-time code, not the
+    /// credential; the app exchanges it.
+    func testParsesTheOneTimeCodeLink() {
+        let pieces = ServiceEndpoint.parseLink(
+            "https://bots.dokodemo-dev.internal:7717/ui#c=abc123"
+        )
+        XCTAssertEqual(pieces?.base.absoluteString, "https://bots.dokodemo-dev.internal:7717")
+        XCTAssertEqual(pieces?.code, "abc123")
+        XCTAssertNil(pieces?.credential)
+        XCTAssertNil(ServiceEndpoint.parse(link: "https://bots.dokodemo-dev.internal:7717/ui#c=abc123"))
+    }
+
     func testParsesTheLoginLinkTheCommandProduces() {
         let endpoint = ServiceEndpoint.parse(
             link: "http://vpn-host:7717/ui?login=abc123"

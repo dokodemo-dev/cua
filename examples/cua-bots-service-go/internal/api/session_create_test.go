@@ -21,6 +21,8 @@ func TestCreatingABotWorksFromTheSessionCookie(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/manage/bots",
 		strings.NewReader(`{"botID":"gamma","spaceID":"local:bot-gamma"}`))
 	req.RemoteAddr = "127.0.0.1:50000"
+	req.Host = "bots.dokodemo-dev.internal:7717"
+	req.Header.Set("Origin", "https://bots.dokodemo-dev.internal:7717")
 	req.AddCookie(cookie)
 	rec := httptest.NewRecorder()
 	svc.ServeHTTP(rec, req)
