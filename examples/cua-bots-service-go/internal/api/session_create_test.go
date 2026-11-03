@@ -16,20 +16,13 @@ func TestCreatingABotWorksFromTheSessionCookie(t *testing.T) {
 	svc, _, now := chatFixture(t)
 	admin := adminCredential(t, svc, now)
 
-	login := httptest.NewRequest(http.MethodGet, "/ui?login="+admin, nil)
-	login.RemoteAddr = "127.0.0.1:50000"
-	rec := httptest.NewRecorder()
-	svc.ServeHTTP(rec, login)
-	cookies := rec.Result().Cookies()
-	if len(cookies) == 0 {
-		t.Fatal("no session cookie")
-	}
+	cookie := sessionCookie(t, svc, admin)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/manage/bots",
 		strings.NewReader(`{"botID":"gamma","spaceID":"local:bot-gamma"}`))
 	req.RemoteAddr = "127.0.0.1:50000"
-	req.AddCookie(cookies[0])
-	rec = httptest.NewRecorder()
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
 	svc.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("cookie create: %d %s", rec.Code, rec.Body)

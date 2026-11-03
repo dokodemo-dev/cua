@@ -36,13 +36,11 @@ async function exchangeLogin(input2) {
 }
 async function takeLoginFromURL() {
   const hash = location.hash;
-  const fromHash = hash.startsWith("#c=") ? { code: decodeURIComponent(hash.slice(3)) } : hash.startsWith("#k=") ? { token: decodeURIComponent(hash.slice(3)) } : null;
+  const code = hash.startsWith("#c=") ? decodeURIComponent(hash.slice(3)) : "";
   if (hash) history.replaceState(null, "", location.pathname + location.search);
-  const legacy = legacyCredential();
-  if (legacy) clearCredential();
-  const input2 = fromHash ?? (legacy ? { token: legacy } : null);
-  if (!input2) return "none";
-  return await exchangeLogin(input2) ? "ok" : "failed";
+  if (legacyCredential()) clearCredential();
+  if (!code) return hash.startsWith("#k=") ? "retired" : "none";
+  return await exchangeLogin({ code }) ? "ok" : "failed";
 }
 function request(path, init = {}) {
   const headers = new Headers(init.headers);
@@ -3116,6 +3114,8 @@ async function bootstrap() {
   const linkLogin = await takeLoginFromURL();
   if (linkLogin === "failed") {
     toast("サインインのリンクが期限切れです。cua-bots-open で開き直してください。", "error");
+  } else if (linkLogin === "retired") {
+    toast("この形式のリンクは廃止されました。cua-bots-open で開き直してください。", "error");
   } else if (linkLogin === "ok") {
     await refreshBots();
   }
@@ -3125,6 +3125,8 @@ async function bootstrap() {
       if (again === "ok") await refreshBots();
       else if (again === "failed") {
         toast("サインインのリンクが期限切れです。cua-bots-open で開き直してください。", "error");
+      } else if (again === "retired") {
+        toast("この形式のリンクは廃止されました。cua-bots-open で開き直してください。", "error");
       }
     })();
   });

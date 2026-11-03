@@ -185,23 +185,18 @@ export async function exchangeLogin(input: { code?: string; token?: string }): P
 }
 
 /**
- * Reads the sign-in value from the URL fragment (`#c=<code>` now, `#k=<token>`
- * from older links), removes it from the address bar first, and exchanges it. A
- * leftover localStorage credential is migrated the same way.
+ * Reads the one-time code from the URL fragment, removes it from the address bar
+ * before anything else, and trades it for the session cookie. A retired
+ * `#k=<token>` link, and a stored credential from an older version, are refused
+ * and cleared.
  */
-export async function takeLoginFromURL(): Promise<'none' | 'ok' | 'failed'> {
+export async function takeLoginFromURL(): Promise<'none' | 'ok' | 'failed' | 'retired'> {
   const hash = location.hash;
-  const fromHash = hash.startsWith('#c=')
-    ? { code: decodeURIComponent(hash.slice(3)) }
-    : hash.startsWith('#k=')
-      ? { token: decodeURIComponent(hash.slice(3)) }
-      : null;
+  const code = hash.startsWith('#c=') ? decodeURIComponent(hash.slice(3)) : '';
   if (hash) history.replaceState(null, '', location.pathname + location.search);
-  const legacy = legacyCredential();
-  if (legacy) clearCredential();
-  const input = fromHash ?? (legacy ? { token: legacy } : null);
-  if (!input) return 'none';
-  return (await exchangeLogin(input)) ? 'ok' : 'failed';
+  if (legacyCredential()) clearCredential();
+  if (!code) return hash.startsWith('#k=') ? 'retired' : 'none';
+  return (await exchangeLogin({ code })) ? 'ok' : 'failed';
 }
 
 export function request(path: string, init: RequestInit = {}): Promise<Response> {

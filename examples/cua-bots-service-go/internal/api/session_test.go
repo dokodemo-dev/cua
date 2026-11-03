@@ -13,54 +13,39 @@ import (
 	"time"
 )
 
-func TestLoginLinkSetsASessionCookieTheAPIAccepts(t *testing.T) {
+// A credential link was retired with the one-time-code sign-in: the service
+// refuses it and sets no cookie.
+// sessionCookie trades a credential for the browser's session cookie, the way
+// the sign-in field does.
+func sessionCookie(t *testing.T, svc *Service, token string) *http.Cookie {
+	t.Helper()
+	rec := chatCall(t, svc, http.MethodPost, "/v1/login/exchange", "",
+		`{"token":"`+token+`"}`)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("exchange: %d %s", rec.Code, rec.Body)
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("no session cookie")
+	}
+	return cookies[0]
+}
+
+func TestACredentialLinkIsGone(t *testing.T) {
 	svc, _, now := chatFixture(t)
 	admin := adminCredential(t, svc, now)
-
 	req := httptest.NewRequest(http.MethodGet, "/ui?login="+admin, nil)
 	req.RemoteAddr = "127.0.0.1:50000"
 	rec := httptest.NewRecorder()
 	svc.ServeHTTP(rec, req)
-	// The page only sets the cookie; the credential never enters the document.
-	if rec.Code != http.StatusOK {
-		t.Fatalf("login: %d", rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("login link: %d", rec.Code)
+	}
+	if len(rec.Result().Cookies()) != 0 {
+		t.Fatalf("a retired link set a cookie: %v", rec.Result().Cookies())
 	}
 	if strings.Contains(rec.Body.String(), admin) {
-		t.Fatal("the page contains the credential")
-	}
-	if !strings.Contains(rec.Body.String(), "localStorage") {
-		// expected: nothing is stored in script-visible storage
-	} else {
-		t.Fatal("the page still writes the credential to localStorage")
-	}
-	cookies := rec.Result().Cookies()
-	if len(cookies) == 0 || cookies[0].Name != "cua_session" {
-		t.Fatalf("no session cookie: %v", cookies)
-	}
-	if !cookies[0].HttpOnly {
-		t.Fatal("the session cookie must not be readable from script")
-	}
-
-	// With the cookie alone, the API must answer as that credential.
-	req2 := httptest.NewRequest(http.MethodGet, "/v1/bots", nil)
-	req2.RemoteAddr = "127.0.0.1:50000"
-	req2.AddCookie(cookies[0])
-	rec = httptest.NewRecorder()
-	svc.ServeHTTP(rec, req2)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("cookie auth: %d %s", rec.Code, rec.Body)
-	}
-}
-
-// A credential that will never work must not look like a successful sign-in.
-func TestLoginWithAStaleCredentialSaysSo(t *testing.T) {
-	svc, _, _ := chatFixture(t)
-	req := httptest.NewRequest(http.MethodGet, "/ui?login=stale-value", nil)
-	req.RemoteAddr = "127.0.0.1:50000"
-	rec := httptest.NewRecorder()
-	svc.ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/ui?login=failed" {
-		t.Fatalf("stale credential: %d %q", rec.Code, rec.Header().Get("Location"))
+		t.Fatal("the answer contains the credential")
 	}
 }
 
@@ -146,19 +131,4 @@ func spaceState(t *testing.T, svc *Service, botID string) SpaceState {
 		t.Fatal(err)
 	}
 	return state
-}
-
-// The login page carries only its policy and the path to open.
-func TestTheLoginPageKeepsThePathAndTheNonce(t *testing.T) {
-	page := string(loginPage("unused", "/ui/alpha/library", "n0nce"))
-	if strings.Contains(page, "unused") {
-		t.Fatalf("the credential reached the page: %s", page)
-	}
-	if !strings.Contains(page, `<script nonce="n0nce">`) {
-		t.Fatalf("the inline script has no nonce: %s", page)
-	}
-	// The link keeps pointing at the page it was for.
-	if !strings.Contains(page, `location.replace("/ui/alpha/library")`) {
-		t.Fatalf("the path was not carried through: %s", page)
-	}
 }

@@ -139,6 +139,8 @@ async function bootstrap(): Promise<void> {
     // The code was already used or expired; say so instead of showing an
     // empty page that looks like a broken session.
     toast('サインインのリンクが期限切れです。cua-bots-open で開き直してください。', 'error');
+  } else if (linkLogin === 'retired') {
+    toast('この形式のリンクは廃止されました。cua-bots-open で開き直してください。', 'error');
   } else if (linkLogin === 'ok') {
     await refreshBots();
   }
@@ -150,6 +152,8 @@ async function bootstrap(): Promise<void> {
       if (again === 'ok') await refreshBots();
       else if (again === 'failed') {
         toast('サインインのリンクが期限切れです。cua-bots-open で開き直してください。', 'error');
+      } else if (again === 'retired') {
+        toast('この形式のリンクは廃止されました。cua-bots-open で開き直してください。', 'error');
       }
     })();
   });

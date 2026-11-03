@@ -40,18 +40,11 @@ func TestSessionDescribesTheCallerWithoutTheCredential(t *testing.T) {
 func TestSessionWorksFromTheCookie(t *testing.T) {
 	svc, _, now := chatFixture(t)
 	admin := adminCredential(t, svc, now)
-	login := httptest.NewRequest(http.MethodGet, "/ui?login="+admin, nil)
-	login.RemoteAddr = "127.0.0.1:50000"
-	rec := httptest.NewRecorder()
-	svc.ServeHTTP(rec, login)
-	cookies := rec.Result().Cookies()
-	if len(cookies) == 0 {
-		t.Fatal("no cookie")
-	}
+	cookie := sessionCookie(t, svc, admin)
 	req := httptest.NewRequest(http.MethodGet, "/v1/session", nil)
 	req.RemoteAddr = "127.0.0.1:50000"
-	req.AddCookie(cookies[0])
-	rec = httptest.NewRecorder()
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
 	svc.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("cookie session: %d %s", rec.Code, rec.Body)

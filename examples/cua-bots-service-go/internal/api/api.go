@@ -185,27 +185,14 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusSeeOther)
 			return
 		}
-		if code := strings.TrimSpace(r.URL.Query().Get("login")); code != "" {
-			if s.tokens.Authenticate(code, now) == nil {
-				w.Header().Set("Location", r.URL.Path+"?login=failed")
-				w.WriteHeader(http.StatusSeeOther)
-				return
-			}
-			// Sign in with a page rather than a redirect: a redirect can lose
-			// its fragment, and a browser that will not keep our cookie would
-			// then look signed out. The same value is stored by the page itself.
-			s.setSessionCookie(w, r, code, now)
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.URL.Query().Get("login") != "" {
+			// Links carrying a credential in the query were retired with the
+			// one-time-code sign-in; nothing has to keep accepting them.
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
-			securityHeaders(w, "")
-			// The inline script stores the credential and moves on; it carries a
-			// nonce so the page's policy can allow exactly that script.
-			nonce := newNonce()
-			w.Header().Set("Content-Security-Policy",
-				"default-src 'none'; script-src 'nonce-"+nonce+"'; "+
-					"style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; "+
-					"frame-ancestors 'none'")
-			_, _ = w.Write(loginPage(code, r.URL.Path, nonce))
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			w.WriteHeader(http.StatusGone)
+			_, _ = w.Write([]byte("このリンクは廃止されました。cua-bots-open で開き直してください。\n"))
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

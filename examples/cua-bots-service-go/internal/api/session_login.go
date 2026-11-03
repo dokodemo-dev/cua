@@ -3,8 +3,6 @@
 package api
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -106,16 +104,6 @@ func (s *Service) exchangeLogin(w http.ResponseWriter, r *http.Request, body []b
 	s.setSessionCookie(w, r, token, now)
 	w.Header().Set("Cache-Control", "no-store")
 	return http.StatusNoContent, nil
-}
-
-// newNonce is the value a login page's inline script carries, so the page can
-// run that one script while its policy forbids every other.
-func newNonce() string {
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
-		return ""
-	}
-	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
 func clientAddr(r *http.Request) string {
