@@ -21,13 +21,17 @@ func TestLoginLinkSetsASessionCookieTheAPIAccepts(t *testing.T) {
 	req.RemoteAddr = "127.0.0.1:50000"
 	rec := httptest.NewRecorder()
 	svc.ServeHTTP(rec, req)
-	// The login page stores the credential itself, so this is a 200 that both
-	// sets the cookie and hands the value to the page.
+	// The page only sets the cookie; the credential never enters the document.
 	if rec.Code != http.StatusOK {
 		t.Fatalf("login: %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "localStorage.setItem") {
-		t.Fatalf("the page should store the credential: %s", rec.Body)
+	if strings.Contains(rec.Body.String(), admin) {
+		t.Fatal("the page contains the credential")
+	}
+	if !strings.Contains(rec.Body.String(), "localStorage") {
+		// expected: nothing is stored in script-visible storage
+	} else {
+		t.Fatal("the page still writes the credential to localStorage")
 	}
 	cookies := rec.Result().Cookies()
 	if len(cookies) == 0 || cookies[0].Name != "cua_session" {
@@ -144,15 +148,11 @@ func spaceState(t *testing.T, svc *Service, botID string) SpaceState {
 	return state
 }
 
-// The login page's script must be valid JavaScript, or the browser stays on it
-// with nothing stored.
-func TestTheLoginPageScriptIsNotBrokenByEscaping(t *testing.T) {
-	page := string(loginPage("tok-with-\"quotes\"", "/ui/alpha/library", "n0nce"))
-	if strings.Contains(page, "&#34;") {
-		t.Fatalf("the literal was HTML-escaped: %s", page)
-	}
-	if !strings.Contains(page, `"tok-with-\"quotes\""`) {
-		t.Fatalf("the credential is not a JS string literal: %s", page)
+// The login page carries only its policy and the path to open.
+func TestTheLoginPageKeepsThePathAndTheNonce(t *testing.T) {
+	page := string(loginPage("unused", "/ui/alpha/library", "n0nce"))
+	if strings.Contains(page, "unused") {
+		t.Fatalf("the credential reached the page: %s", page)
 	}
 	if !strings.Contains(page, `<script nonce="n0nce">`) {
 		t.Fatalf("the inline script has no nonce: %s", page)
