@@ -147,12 +147,15 @@ func spaceState(t *testing.T, svc *Service, botID string) SpaceState {
 // The login page's script must be valid JavaScript, or the browser stays on it
 // with nothing stored.
 func TestTheLoginPageScriptIsNotBrokenByEscaping(t *testing.T) {
-	page := string(loginPage("tok-with-\"quotes\"", "/ui/alpha/library"))
+	page := string(loginPage("tok-with-\"quotes\"", "/ui/alpha/library", "n0nce"))
 	if strings.Contains(page, "&#34;") {
 		t.Fatalf("the literal was HTML-escaped: %s", page)
 	}
 	if !strings.Contains(page, `"tok-with-\"quotes\""`) {
 		t.Fatalf("the credential is not a JS string literal: %s", page)
+	}
+	if !strings.Contains(page, `<script nonce="n0nce">`) {
+		t.Fatalf("the inline script has no nonce: %s", page)
 	}
 	// The link keeps pointing at the page it was for.
 	if !strings.Contains(page, `location.replace("/ui/alpha/library")`) {

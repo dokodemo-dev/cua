@@ -176,14 +176,19 @@ $S --remove-job <id>                    # 削除（その求人の未配送ス�
 サービスは `/ui` で画面を返す。Mac では `cua-bots-open` を実行すると、VPS の
 管理者資格情報でログインリンクを作ってブラウザで開く（`~/.zshrc` の関数）。
 
-**リンクの資格情報はフラグメントに置く**（`/ui#k=<資格情報>`）。`?login=` はクエリ
-なのでサーバーへ送られ、ブラウザの履歴やアクセスログにも残る。フラグメントは送信されず、
-ページが `localStorage` に控えたあと `history.replaceState` で消す。
+**リンクは長期トークンを運ばない。** `cua-bots-open` はまず
+`POST /v1/login/code`（管理者トークンで認証）で **60 秒・1 回限りのコード**を発行し、
+`https://bots.dokodemo-dev.internal:7717/ui#c=<code>` を開く。ページはフラグメントを
+読み次第 URL から消し、`POST /v1/login/exchange` でコードを **HttpOnly Cookie** と
+交換する。以後の API 呼び出しは Cookie で認証され、JS はトークンを持たない。
 
-`?login=` も互換のため残してある。こちらは **200 の小さなページ**を返し、その場で
-`localStorage` に控えてから `/ui` へ移る（Cookie も同時に置く）。リダイレクトの
-フラグメントは落ちることがあり、Cookie を拒否するブラウザもあるため、ページ自身に
-書かせるのが確実。資格情報は `Authorization` でも送るので、どちらか一方が通れば入れる。
+- コードは推測できない乱数（32 バイト）で、交換時に原子的に消費する。期限切れ・使用済みは 401
+- Cookie は `HttpOnly; SameSite=Strict; Path=/`（HTTPS では `Secure`）。JS から読めないため、
+  XSS があってもトークンを持ち出せない（Cookie を使った操作は防げない）
+- 画面のサインイン欄（手入力）も同じ交換 API を使う。値は保存しない
+- 旧リンク（`#k=<トークン>`）と `?login=` は**互換のため受け付ける**が、新規には発行しない。
+  どちらも交換時に Cookie を置くだけで、トークンは localStorage に残さない
+- 交換の試行は送信元アドレスごとに制限する
 **ブラウザからのポーリングは 2 秒間隔・タブが隠れている間は停止**。サーバーの制限は
 600 リクエスト/分（60 だと画面が自分の上限に当たり、サインインしていないように見えた）。`/ui?logout=1` は両方を消す。設定タブは `GET /v1/session` で「種類（管理者 / Bot）・
 有効期限・できること」を出す。鍵そのものは返さない。失効したリンクで開いた場合は
@@ -387,8 +392,13 @@ Mac/iPhone -> https://bots.dokodemo-dev.internal:7717
   名前で接続する。
 - サーバー鍵は cua-vps で生成し、外へ出さない。CSR だけを管理端末へ渡して署名する。
   CA 秘密鍵は Passman にあり、VPS へ置かない。
-- 証明書と鍵は `/etc/cua-bots/tls/`（鍵 0640、`cua-bots`）。systemd の drop-in で
-  `--tls-cert` / `--tls-key` を渡す。
+- 証明書と鍵は `/var/lib/cua-bots/tls/`（鍵 0600、`cua-bots`）。systemd の drop-in で
+  `--tls-cert` / `--tls-key` を渡す。`/etc/cua-bots` は 0700 root なので、サービス
+  ユーザーが読める場所に置く必要がある。
+- UI の応答には CSP（`default-src 'self'`、インラインスクリプト不可）、
+  `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、
+  `Referrer-Policy: no-referrer` を付ける。ログインページのインラインスクリプトだけ
+  は nonce で許可する。
 - 証明書の有効期間は 365 日。更新は 4.5.1 の手順で行う。
 
 ### 4.5.1 証明書の更新
@@ -428,7 +438,8 @@ openssl verify -purpose sslserver -verify_hostname bots.dokodemo-dev.internal \
 - iPhone: VPN CA をプロファイルで信頼し、WireGuard の設定で DNS にハブの WG アドレスを
   指定する。ハブの CoreDNS は `.dokodemo-dev.internal` を権威応答し、それ以外は NextDNS へ
   転送するので外部名も引ける。アプリは `https://bots.dokodemo-dev.internal:7717` を使う。
-- `cua-bots-open` は `https://bots.dokodemo-dev.internal:7717/ui#k=<token>` を開く。
+- `cua-bots-open` はワンタイムコードを発行し、
+  `https://bots.dokodemo-dev.internal:7717/ui#c=<code>` を開く。
 
 ## 4.8 バックアップ
 

@@ -1,6 +1,6 @@
 // Dialogs: search, settings, a new Bot, credentials, and the sign-in gate.
 
-import { api, saveCredential, type AgentSettings, type Avatar, type ColorName } from './api';
+import { api, exchangeLogin, type AgentSettings, type Avatar, type ColorName } from './api';
 import { koalaHtml } from './avatar';
 import { paintStatusPill, setThinkingSetting, thinkingSetting } from './chat';
 import { actions } from './deps';
@@ -1163,8 +1163,13 @@ function initGate(): void {
   signIn?.addEventListener('click', async () => {
     const value = field?.value.trim() ?? '';
     if (!value) return;
-    saveCredential(value);
+    // The field's value is traded for the session cookie; it is not stored.
+    const ok = await exchangeLogin({ token: value });
     if (field) field.value = '';
+    if (!ok) {
+      toast('この資格情報では入れませんでした。', 'error');
+      return;
+    }
     await actions.refreshBots();
     if (state.signedIn) {
       const gate = document.getElementById('gate');

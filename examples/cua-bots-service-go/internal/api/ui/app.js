@@ -19,30 +19,37 @@ function storage() {
     return null;
   }
 }
-function sessionCredential() {
+function legacyCredential() {
   return (storage()?.getItem(SESSION_KEY) ?? "").trim();
-}
-function saveCredential(value) {
-  storage()?.setItem(SESSION_KEY, value);
 }
 function clearCredential() {
   storage()?.removeItem(SESSION_KEY);
 }
-function takeFragmentCredential() {
+async function exchangeLogin(input2) {
+  const res = await fetch("/v1/login/exchange", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input2),
+    credentials: "same-origin"
+  });
+  return res.ok;
+}
+async function takeLoginFromURL() {
   const hash = location.hash;
-  if (!hash.startsWith("#k=")) return;
-  const value = decodeURIComponent(hash.slice(3));
-  if (value) saveCredential(value);
-  history.replaceState(null, "", location.pathname + location.search);
+  const fromHash = hash.startsWith("#c=") ? { code: decodeURIComponent(hash.slice(3)) } : hash.startsWith("#k=") ? { token: decodeURIComponent(hash.slice(3)) } : null;
+  if (hash) history.replaceState(null, "", location.pathname + location.search);
+  const legacy = legacyCredential();
+  if (legacy) clearCredential();
+  const input2 = fromHash ?? (legacy ? { token: legacy } : null);
+  if (!input2) return "none";
+  return await exchangeLogin(input2) ? "ok" : "failed";
 }
 function request(path, init = {}) {
   const headers = new Headers(init.headers);
-  const credential = sessionCredential();
-  if (credential) headers.set("Authorization", `Bearer ${credential}`);
   if (init.body !== void 0 && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  return fetch(path, { ...init, headers });
+  return fetch(path, { ...init, headers, credentials: "same-origin" });
 }
 async function json(path, init = {}) {
   const res = await request(path, init);
@@ -2243,8 +2250,12 @@ function initGate() {
   signIn?.addEventListener("click", async () => {
     const value = field?.value.trim() ?? "";
     if (!value) return;
-    saveCredential(value);
+    const ok = await exchangeLogin({ token: value });
     if (field) field.value = "";
+    if (!ok) {
+      toast("この資格情報では入れませんでした。", "error");
+      return;
+    }
     await actions.refreshBots();
     if (state.signedIn) {
       const gate = document.getElementById("gate");
@@ -3101,8 +3112,22 @@ async function refreshBots() {
     toast("Bot の一覧を読み込めませんでした。接続を確認してください。", "error");
   }
 }
-function bootstrap() {
-  takeFragmentCredential();
+async function bootstrap() {
+  const linkLogin = await takeLoginFromURL();
+  if (linkLogin === "failed") {
+    toast("サインインのリンクが期限切れです。cua-bots-open で開き直してください。", "error");
+  } else if (linkLogin === "ok") {
+    await refreshBots();
+  }
+  window.addEventListener("hashchange", () => {
+    void (async () => {
+      const again = await takeLoginFromURL();
+      if (again === "ok") await refreshBots();
+      else if (again === "failed") {
+        toast("サインインのリンクが期限切れです。cua-bots-open で開き直してください。", "error");
+      }
+    })();
+  });
   if (location.search.includes("logout=1")) {
     clearCredential();
     history.replaceState(null, "", "/ui");

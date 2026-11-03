@@ -106,8 +106,9 @@ go build -o /tmp/cua-bots ./cmd/cua-bots-service
   --turn-command /path/to/turn-script
 ```
 
-`/ui#k=<管理者トークン>` を開くと入れる（資格情報はフラグメントに置くので、query と
-違ってサーバーのログやブラウザの履歴に残らない。`/ui?login=` も互換のため受け付ける）。`--turn-command` は標準出力を1行ずつ
+`POST /v1/login/code` でワンタイムコードを取り、`/ui#c=<code>` を開くと入れる。
+ページがコードを HttpOnly Cookie と交換するので、トークンは URL にも JS の storage にも
+残らない（`#k=<トークン>` と `?login=` は互換のため受け付ける）。`--turn-command` は標準出力を1行ずつ
 ターンへ流すので、`echo` するだけのスクリプトでも会話の表示を確認できる。
 
 ### まだ無いもの

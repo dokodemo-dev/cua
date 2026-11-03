@@ -31,6 +31,7 @@ func serveAsset(w http.ResponseWriter, r *http.Request, contentType string, body
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("ETag", tag)
+	securityHeaders(w, "")
 	if r.Header.Get("If-None-Match") == tag {
 		w.WriteHeader(http.StatusNotModified)
 		return

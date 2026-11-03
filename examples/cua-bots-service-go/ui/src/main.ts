@@ -1,7 +1,7 @@
 // Boot: read the credential, load the Bot list, then let each part of the page
 // take over. Everything here is wiring; behaviour lives in the modules.
 
-import { ApiError, api, clearCredential, takeFragmentCredential } from './api';
+import { ApiError, api, clearCredential, takeLoginFromURL } from './api';
 import { initChat, paintStatusPill, pollNow, refreshComposer, resetThread } from './chat';
 import { setActions } from './deps';
 import { icon, toast } from './dom';
@@ -131,8 +131,28 @@ async function refreshBots(): Promise<void> {
   }
 }
 
-function bootstrap(): void {
-  takeFragmentCredential();
+async function bootstrap(): Promise<void> {
+  // A link carries a one-time code; exchanging it sets the session cookie
+  // before the first fetch, and the page never holds the token.
+  const linkLogin = await takeLoginFromURL();
+  if (linkLogin === 'failed') {
+    // The code was already used or expired; say so instead of showing an
+    // empty page that looks like a broken session.
+    toast('サインインのリンクが期限切れです。cua-bots-open で開き直してください。', 'error');
+  } else if (linkLogin === 'ok') {
+    await refreshBots();
+  }
+  // Opening a link while this page is already loaded changes only the
+  // fragment, which does not reload; exchange it here as well.
+  window.addEventListener('hashchange', () => {
+    void (async () => {
+      const again = await takeLoginFromURL();
+      if (again === 'ok') await refreshBots();
+      else if (again === 'failed') {
+        toast('サインインのリンクが期限切れです。cua-bots-open で開き直してください。', 'error');
+      }
+    })();
+  });
   // A sign-out is a sign-out even when the page is opened with the query alone.
   if (location.search.includes('logout=1')) {
     clearCredential();

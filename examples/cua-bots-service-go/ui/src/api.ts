@@ -147,6 +147,9 @@ export class ApiError extends Error {
   }
 }
 
+// The session lives in an HttpOnly cookie: page script never holds the token,
+// so a script injected into the page cannot read it out of storage. This key is
+// only here to clear the copy older versions left in localStorage.
 export const SESSION_KEY = 'cua.session';
 
 function storage(): Storage | null {
@@ -157,37 +160,57 @@ function storage(): Storage | null {
   }
 }
 
-export function sessionCredential(): string {
+/** A credential an older version may still have stored. */
+export function legacyCredential(): string {
   return (storage()?.getItem(SESSION_KEY) ?? '').trim();
-}
-
-export function saveCredential(value: string): void {
-  storage()?.setItem(SESSION_KEY, value);
 }
 
 export function clearCredential(): void {
   storage()?.removeItem(SESSION_KEY);
 }
 
-// A credential that arrived in the URL fragment is kept here too: some browsers
-// refuse the cookie set on the login redirect, and this is the same value over
-// an origin the page already trusts.
-export function takeFragmentCredential(): void {
+/**
+ * Trades a one-time code, or a credential typed into the sign-in field, for the
+ * session cookie. Nothing is kept: the browser holds the cookie and the page
+ * never sees the token again.
+ */
+export async function exchangeLogin(input: { code?: string; token?: string }): Promise<boolean> {
+  const res = await fetch('/v1/login/exchange', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    credentials: 'same-origin',
+  });
+  return res.ok;
+}
+
+/**
+ * Reads the sign-in value from the URL fragment (`#c=<code>` now, `#k=<token>`
+ * from older links), removes it from the address bar first, and exchanges it. A
+ * leftover localStorage credential is migrated the same way.
+ */
+export async function takeLoginFromURL(): Promise<'none' | 'ok' | 'failed'> {
   const hash = location.hash;
-  if (!hash.startsWith('#k=')) return;
-  const value = decodeURIComponent(hash.slice(3));
-  if (value) saveCredential(value);
-  history.replaceState(null, '', location.pathname + location.search);
+  const fromHash = hash.startsWith('#c=')
+    ? { code: decodeURIComponent(hash.slice(3)) }
+    : hash.startsWith('#k=')
+      ? { token: decodeURIComponent(hash.slice(3)) }
+      : null;
+  if (hash) history.replaceState(null, '', location.pathname + location.search);
+  const legacy = legacyCredential();
+  if (legacy) clearCredential();
+  const input = fromHash ?? (legacy ? { token: legacy } : null);
+  if (!input) return 'none';
+  return (await exchangeLogin(input)) ? 'ok' : 'failed';
 }
 
 export function request(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
-  const credential = sessionCredential();
-  if (credential) headers.set('Authorization', `Bearer ${credential}`);
+  // The session travels in the HttpOnly cookie; fetch sends it for this origin.
   if (init.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  return fetch(path, { ...init, headers });
+  return fetch(path, { ...init, headers, credentials: 'same-origin' });
 }
 
 export async function json<T>(path: string, init: RequestInit = {}): Promise<T> {

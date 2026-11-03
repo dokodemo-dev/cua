@@ -80,6 +80,8 @@ type Service struct {
 	TokenLifetime time.Duration
 	// OnDenied reports refusals without the token value.
 	OnDenied func(status int, path string)
+	// codes are the one-time login codes a browser link carries.
+	codes *loginCodes
 	// chat is the browser window over Bot turns.
 	chat *Chat
 }
@@ -106,6 +108,7 @@ func New(st State, store Persister) *Service {
 		BodyLimit: 64 * 1024,
 		RateLimit: 600,
 	}
+	s.codes = newLoginCodes(func() time.Time { return s.now() })
 	s.pins = append([]string(nil), st.Pins...)
 	s.agents = map[string]AgentSettings{}
 	for id, settings := range st.Agents {
@@ -177,10 +180,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// open a browser that is already signed in and the token never has to
 		// be pasted into a field.
 		if r.URL.Query().Get("logout") != "" {
-			http.SetCookie(w, &http.Cookie{
-				Name: "cua_session", Value: "", Path: "/", HttpOnly: true,
-				MaxAge: -1, Expires: time.Unix(0, 0),
-			})
+			clearSessionCookie(w, r)
 			w.Header().Set("Location", "/ui")
 			w.WriteHeader(http.StatusSeeOther)
 			return
@@ -194,22 +194,25 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Sign in with a page rather than a redirect: a redirect can lose
 			// its fragment, and a browser that will not keep our cookie would
 			// then look signed out. The same value is stored by the page itself.
-			http.SetCookie(w, &http.Cookie{
-				Name: "cua_session", Value: code, Path: "/", HttpOnly: true,
-				SameSite: http.SameSiteLaxMode,
-				Expires:  now.Add(s.sessionLifetime()),
-			})
+			s.setSessionCookie(w, r, code, now)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
-			w.Header().Set("Referrer-Policy", "no-referrer")
-			// Signing in keeps the path the link pointed at.
-			_, _ = w.Write(loginPage(code, r.URL.Path))
+			securityHeaders(w, "")
+			// The inline script stores the credential and moves on; it carries a
+			// nonce so the page's policy can allow exactly that script.
+			nonce := newNonce()
+			w.Header().Set("Content-Security-Policy",
+				"default-src 'none'; script-src 'nonce-"+nonce+"'; "+
+					"style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; "+
+					"frame-ancestors 'none'")
+			_, _ = w.Write(loginPage(code, r.URL.Path, nonce))
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		// A cached copy of an older page cannot know about a newer sign-in
 		// route, which looks exactly like a broken session.
 		w.Header().Set("Cache-Control", "no-store")
+		securityHeaders(w, appCSP)
 		_, _ = w.Write(chatPage)
 		return
 	}
@@ -222,9 +225,18 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.deny(w, http.StatusRequestEntityTooLarge, "request body too large", r)
 		return
 	}
+	if r.Method == http.MethodPost && r.URL.Path == "/v1/login/exchange" {
+		status, payload := s.exchangeLogin(w, r, body, now)
+		if status == http.StatusNoContent {
+			w.WriteHeader(status)
+			return
+		}
+		writeJSON(w, status, payload)
+		return
+	}
 	token := bearer(r)
 	if token == "" {
-		if c, err := r.Cookie("cua_session"); err == nil {
+		if c, err := r.Cookie(sessionCookieName); err == nil {
 			token = strings.TrimSpace(c.Value)
 		}
 	}
@@ -236,6 +248,11 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if token != "" && !s.limiter.allow(token, now) {
 		s.deny(w, http.StatusTooManyRequests, "too many requests", r)
+		return
+	}
+	if r.Method == http.MethodPost && r.URL.Path == "/v1/login/code" {
+		status, payload := s.issueLoginCode(token)
+		writeJSON(w, status, payload)
 		return
 	}
 	mutating := r.Method != http.MethodGet
