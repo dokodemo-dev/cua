@@ -472,6 +472,36 @@ cua-vps はハブの CoreDNS を使わないため、`/etc/hosts` に
 これが無いと、ルーティンの設定取得（`CUA_BOTS_AGENT_URL`）と
 `curl` の確認が名前解決で失敗する。
 
+## 4.9 監視
+
+`cua-bots-watch.timer`（5 分ごと）が次の 3 つを見て、hayabusa の「cua-bots」通知
+チャンネルへ投稿する。
+
+| 何を | 条件 | 投稿 |
+|---|---|---|
+| サービスの死活 | `/v1/health` が 3 回連続で失敗（HTTP 200 以外） | 落ちたとき 1 回、復旧したとき 1 回 |
+| 証明書の期限 | 残り 30 日以下 | 証明書ごとに 1 回（更新したら新しい期限でまた通知） |
+
+```sh
+sudo systemctl list-timers cua-bots-watch.timer
+sudo journalctl -u cua-bots-watch.service -n 20
+sudo cat /var/lib/cua-bots/watch/state          # 連続失敗回数
+sudo cat /var/lib/cua-bots/watch/cert-notified  # 通知済みの証明書期限
+```
+
+- 設定は `/etc/cua-bots/watch.env`（0640 root:cua-bots）に `HAYABUSA_URL`、
+  `HAYABUSA_INTEGRATION_ID`、`HAYABUSA_TOKEN`。値は Passman の
+  `hayabusa-webhook-*` 系と同じ扱いで、画面・ログ・コミットへ出さない。
+  連携をローテーションしたら `POST /api/admin/integrations/<id>/rotate` の戻り値で
+  このファイルを作り直す
+- 送信は `Idempotency-Key` 付き。429 とネットワークエラーだけ再試行し、
+  400/401/404/409 は再送しない
+- cua-vps からハブの 443 へ出る必要があるため、ハブの UFW に
+  cua-vps の WG アドレスからハブの WG アドレス:443 への許可を 1 本足してある
+  （`hub_firewall` ロールは「ここに無いルールは放置する」ので消えない）
+- 名前解決は cua-vps の `/etc/hosts` に `bots` と `hayabusa` を置いている
+  （cua-vps はハブの CoreDNS を使わない）
+
 ## 5. Mac から届かせる（ハブ中継）
 
 ハブは `ip_forward=0` でピア間転送をしないため、Mac から VPS の WG アドレスへ直接は届かない。

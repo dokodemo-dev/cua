@@ -198,5 +198,6 @@ upstream の `examples/cua-bots-ios`（Mac アプリの相棒）は残してい�
   `libs/cua/crates/cua-agents/installables.json` の固定版を比べ、設定 → Space に
   「更新あり」を出す。`cua sb exec` を 1 回呼ぶので 60 秒キャッシュと手動更新を付ける。
   dsh は developer preview なので、通知だけで自動更新はしない。
+- **監視の拡張**: いまは死活と証明書だけ。ターン失敗率やキュー滞留を見るならメトリクスが要る。
 - **承認キューの UI**: 実行中の承認要求を画面から許可・拒否する。
 - **ターンの停止**: 実行中のターンを中断する（CLI の run 停止を API 経由で）。
